@@ -1,0 +1,11 @@
+name: vipassana-ucenlist-knowledge-skill
+status: proposed
+created: 2026-06-26
+schema: spec-driven
+artifacts:
+  - id: proposal
+    status: done
+  - id: design
+    status: done
+  - id: tasks
+    status: done

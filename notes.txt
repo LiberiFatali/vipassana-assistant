@@ -1,0 +1,6 @@
+A few open threads for when you're ready to build the chatbot itself:
+
+- Course schedule is dynamic — the site links to schedule.vridhamma.org for actual dates, so the chatbot may need a live fetch tool rather than static data
+- Two languages — the site serves Vietnamese and English users; the chatbot may need bilingual capability
+- Registration flow — the site is vague ("visit /courses and follow instructions"); you may want to clarify what the actual registration steps look like
+- Scope boundary — should the chatbot handle general Vipassana questions (e.g., about Goenka globally) or strictly UCENLIST-specific?
