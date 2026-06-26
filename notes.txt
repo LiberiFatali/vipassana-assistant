@@ -4,3 +4,14 @@ A few open threads for when you're ready to build the chatbot itself:
 - Two languages — the site serves Vietnamese and English users; the chatbot may need bilingual capability
 - Registration flow — the site is vague ("visit /courses and follow instructions"); you may want to clarify what the actual registration steps look like
 - Scope boundary — should the chatbot handle general Vipassana questions (e.g., about Goenka globally) or strictly UCENLIST-specific?
+
+
+
+Recommended Next Step
+Now that both the Vipassana UCENLIST Knowledge Skill and the Vipassana Course Discovery MCP Server are fully implemented and archived, the next phase is to build the core chatbot agent itself using the Google ADK.
+
+The chatbot will:
+
+Integrate the vipassana-ucenlist-knowledge skill for answering static/informational queries.
+Connect to the vipassana-course-discovery-mcp server using MCPToolset with StdioServerParameters to allow live course discovery.
+

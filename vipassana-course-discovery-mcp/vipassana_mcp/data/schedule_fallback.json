@@ -1,0 +1,54 @@
+{
+  "generated_at": "2026-06-26",
+  "note": "Manually seeded fallback schedule. Update this file when courses change or when live scraping consistently fails.",
+  "courses": [
+    {
+      "center": "Dhamma Virocana",
+      "center_id": "virocana",
+      "location": "Ha Noi",
+      "type": "10-day",
+      "start_date": "2026-07-01",
+      "end_date": "2026-07-12",
+      "status": "unknown",
+      "apply_url": "https://schedule.vridhamma.org/vi/courses/virocana",
+      "notes": "Dữ liệu dự phòng — vui lòng kiểm tra schedule.vridhamma.org để biết tình trạng hiện tại. / Fallback data — check schedule.vridhamma.org for current status.",
+      "data_freshness": "fallback"
+    },
+    {
+      "center": "Dhamma Virocana",
+      "center_id": "virocana",
+      "location": "Ha Noi",
+      "type": "10-day",
+      "start_date": "2026-09-01",
+      "end_date": "2026-09-12",
+      "status": "unknown",
+      "apply_url": "https://schedule.vridhamma.org/vi/courses/virocana",
+      "notes": "Dữ liệu dự phòng — vui lòng kiểm tra schedule.vridhamma.org để biết tình trạng hiện tại. / Fallback data — check schedule.vridhamma.org for current status.",
+      "data_freshness": "fallback"
+    },
+    {
+      "center": "Dhamma Vutthi",
+      "center_id": "vutthi",
+      "location": "Ho Chi Minh City",
+      "type": "10-day",
+      "start_date": "2026-07-15",
+      "end_date": "2026-07-26",
+      "status": "unknown",
+      "apply_url": "https://schedule.vridhamma.org/vi/courses/vutthi",
+      "notes": "Dữ liệu dự phòng — vui lòng kiểm tra schedule.vridhamma.org để biết tình trạng hiện tại. / Fallback data — check schedule.vridhamma.org for current status.",
+      "data_freshness": "fallback"
+    },
+    {
+      "center": "Dhamma Vutthi",
+      "center_id": "vutthi",
+      "location": "Ho Chi Minh City",
+      "type": "10-day",
+      "start_date": "2026-10-01",
+      "end_date": "2026-10-12",
+      "status": "unknown",
+      "apply_url": "https://schedule.vridhamma.org/vi/courses/vutthi",
+      "notes": "Dữ liệu dự phòng — vui lòng kiểm tra schedule.vridhamma.org để biết tình trạng hiện tại. / Fallback data — check schedule.vridhamma.org for current status.",
+      "data_freshness": "fallback"
+    }
+  ]
+}
