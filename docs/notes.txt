@@ -15,3 +15,17 @@ The chatbot will:
 Integrate the vipassana-ucenlist-knowledge skill for answering static/informational queries.
 Connect to the vipassana-course-discovery-mcp server using MCPToolset with StdioServerParameters to allow live course discovery.
 
+
+Here's your Kaggle writeup:
+kaggle_writeup.md
+
+Track selected: Agents for Good — fits perfectly since UCENLIST is a non-profit serving a community need.
+
+Writeup structure (~650 words, well under the 2,500 limit):
+
+Things you'll still need for submission:
+  - Cover image — required for Kaggle writeup
+  - YouTube video (≤5 min) — demo the CLI chatbot in action
+  - Public GitHub repo link — update the repo URL in the writeup if the slug differs
+  - Submission deadline: July 6, 2026 at 11:59 PM PT
+  - Let me know if you'd like to adjust the tone, add/remove sections, or generate a cover image!
