@@ -20,6 +20,7 @@ Dependencies:
 from __future__ import annotations
 
 import os
+import pathlib
 import re
 
 from dotenv import load_dotenv
@@ -101,67 +102,7 @@ the list_courses tool.
 
 ## KNOWLEDGE BASE
 
-### What is Vipassana?
-Vipassana means "to see things as they really are" — one of India's most ancient \
-meditation techniques, rediscovered by Gotama Buddha 2,500+ years ago. It is a \
-non-sectarian technique for self-transformation through self-observation of breath \
-and body sensations. Anyone of any religion may practice it.
-
-Three steps:
-1. Sila (Morality): abstain from harming others
-2. Samadhi (Concentration): observe natural breath
-3. Panna (Wisdom): observe body sensations with equanimity — this is Vipassana proper
-
-### About UCENLIST
-Full name: UNESCO Center for Life Skills Training (UCENLIST)
-Type: Non-profit, member of Vietnam UNESCO Association
-Founded: October 18, 2012
-Mission: Organizing non-profit Vipassana courses to improve mental well-being
-Email: info@ucenlist.org | Website: https://ucenlist.org/en
-
-### About S.N. Goenka
-Born in Myanmar (Burma) of Indian descent. Learned Vipassana from Sayagyi U Ba Khin. \
-Began teaching in India in 1969. Established a global network of meditation centers. \
-Spoke at the UN Millennium World Peace Summit in 2000. Awarded India's Padma Award in 2012. \
-Passed away September 2013, age 89.
-
-### Meditation Centers
-- **Dhamma Virocana** — Hà Nội, North Vietnam
-- **Dhamma Vutthi** — TP. Hồ Chí Minh (HCMC), South Vietnam
-
-Schedule: https://schedule.vridhamma.org
-
-### Code of Discipline (5 Precepts for All Students)
-1. Abstain from killing any being
-2. Abstain from stealing
-3. Abstain from all sexual activity
-4. Abstain from telling lies
-5. Abstain from all intoxicants
-
-**Noble Silence:** Students observe silence of body, speech, and mind from arrival \
-until the morning of the last full day. No communication with fellow students.
-
-**Separation of sexes:** Men and women remain separate throughout the course.
-
-**No outside contacts:** No phones, books, cameras during the course.
-
-### Daily Timetable (10-day course)
-- 04:00 — Morning wake-up bell
-- 04:30–06:30 — Meditate in hall or room
-- 06:30–08:00 — Breakfast break
-- 08:00–09:00 — Group meditation in hall
-- 09:00–11:00 — Meditate in hall or room
-- 11:00–12:00 — Lunch break
-- 12:00–13:00 — Rest / interview with teacher
-- 13:00–14:30 — Meditate in hall or room
-- 14:30–15:30 — Group meditation
-- 15:30–17:00 — Meditate in hall or room
-- 17:00–18:00 — Tea break
-- 18:00–19:00 — Group meditation in hall
-- 19:00–20:15 — Teacher's discourse (video)
-- 20:15–21:00 — Group meditation in hall
-- 21:00–21:30 — Question time in hall
-- 21:30 — Retire to rooms; lights out
+{knowledge_base}
 
 ---
 
@@ -204,6 +145,37 @@ Please verify the actual dates at https://schedule.vridhamma.org before making p
 
 
 # ---------------------------------------------------------------------------
+# Dynamic knowledge base loader (Task 2.1)
+# ---------------------------------------------------------------------------
+_SKILL_MD_PATH = (
+    pathlib.Path(__file__).parent.parent
+    / ".agents"
+    / "skills"
+    / "vipassana-ucenlist-knowledge"
+    / "SKILL.md"
+)
+
+
+def load_knowledge_base() -> str:
+    """
+    Read SKILL.md from the vipassana-ucenlist-knowledge skill directory.
+
+    Falls back to an empty string so the agent still starts if the file is
+    missing (rather than crashing at import time).
+    """
+    try:
+        return _SKILL_MD_PATH.read_text(encoding="utf-8")
+    except OSError as exc:
+        import warnings
+        warnings.warn(
+            f"Could not load knowledge base from {_SKILL_MD_PATH}: {exc}. "
+            "Falling back to empty knowledge base.",
+            stacklevel=2,
+        )
+        return ""
+
+
+# ---------------------------------------------------------------------------
 # MCP Toolset — vipassana-course-discovery-mcp (Task 2.2)
 # ---------------------------------------------------------------------------
 def create_mcp_toolset() -> McpToolset:
@@ -222,11 +194,16 @@ def create_mcp_toolset() -> McpToolset:
 # ---------------------------------------------------------------------------
 def create_agent() -> Agent:
     """Create and return the configured Vipassana chatbot agent."""
+    # Inject the full SKILL.md into the system prompt so the agent has
+    # detailed, up-to-date knowledge about Vipassana, centers, and schedules.
+    instruction = KNOWLEDGE_SYSTEM_PROMPT.format(
+        knowledge_base=load_knowledge_base()
+    )
     return Agent(
         name="vipassana_ucenlist_chatbot",
         model=os.getenv("AGENT_MODEL", "gemini-2.0-flash"),
         description="Vipassana UCENLIST Chatbot — helps users learn about and register for Vipassana meditation courses in Vietnam.",
-        instruction=KNOWLEDGE_SYSTEM_PROMPT,
+        instruction=instruction,
         tools=[create_mcp_toolset()],
     )
 
