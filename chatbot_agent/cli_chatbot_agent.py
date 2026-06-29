@@ -201,7 +201,7 @@ def create_agent() -> Agent:
     )
     return Agent(
         name="vipassana_ucenlist_chatbot",
-        model=os.getenv("AGENT_MODEL", "gemini-2.0-flash"),
+        model=os.getenv("AGENT_MODEL", "gemini-3.5-flash"),
         description="Vipassana UCENLIST Chatbot — helps users learn about and register for Vipassana meditation courses in Vietnam.",
         instruction=instruction,
         tools=[create_mcp_toolset()],

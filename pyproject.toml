@@ -3,11 +3,14 @@ name = "vipassana-ucenlist-agent"
 version = "0.1.0"
 description = "Vipassana UCENLIST Chatbot Agent — integrates knowledge skill and MCP course discovery"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = "==3.13"
 dependencies = [
-    "google-adk>=2.3.0",
-    "mcp[cli]>=1.28.1",
-    "python-dotenv>=1.2.2",
+    "a2a-sdk[http-server]==0.3.26",
+    "aiohttp==3.14.1",
+    "google-adk[gcp]==2.3.0",
+    "mcp[cli]==1.28.1",
+    "python-dotenv==1.2.2",
+    "streamlit==1.58.0",
 ]
 
 

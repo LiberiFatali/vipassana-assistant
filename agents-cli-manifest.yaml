@@ -1,0 +1,19 @@
+name: "vipassana-ucenlist-agent"
+acli_version: "0.6.1"
+agent_directory: "chatbot_agent"
+region: "asia-southeast1"
+base_template: "local_the_capstone"
+generated_at: "2026-06-29T03:08:44.555630+00:00"
+language: "python"
+create_params:
+  deployment_target: "agent_runtime"
+  session_type: "none"
+  cicd_runner: "skip"
+  include_data_ingestion: false
+  is_a2a: true
+  datastore: "none"
+  agent_guidance_filename: "GEMINI.md"
+  model: "projects/gen-lang-client-0420797325/locations/asia-southeast1/publishers/google/models/gemini-3.5-flash"
+
+env_vars:
+  AGENT_MODEL: "gemini-3.5-flash"

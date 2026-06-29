@@ -18,19 +18,21 @@ There was no conversational assistant to bridge that gap.
 
 ## What I Built
 
-A **bilingual (Vietnamese/English) AI chatbot agent** that answers questions about Vipassana meditation and UCENLIST, then fetches live course schedules and guides users to register — all without automating sensitive personal actions.
+A **bilingual (Vietnamese/English) AI chatbot agent and Streamlit Web UI** that answers questions about Vipassana meditation and UCENLIST, fetches live course schedules, and guides users to register — all through a premium, responsive web interface.
 
 ### Architecture
 
 ```
-chatbot_agent (Google ADK)
-├── KNOWLEDGE_SYSTEM_PROMPT   ← vipassana-ucenlist-knowledge skill (embedded)
-├── McpToolset                ← vipassana-course-discovery-mcp via stdio
-├── sanitize_urls()           ← Safe Domain Gating post-processor
-└── Runner (InMemorySession)  ← Interactive CLI session loop
+Streamlit App (chatbot_agent/streamlit_app.py)
+├── Session State Caching & Localization (default: Vietnamese)
+└── chatbot_agent (Google ADK)
+    ├── KNOWLEDGE_SYSTEM_PROMPT   ← vipassana-ucenlist-knowledge skill (embedded)
+    ├── McpToolset                ← vipassana-course-discovery-mcp via stdio
+    ├── sanitize_urls()           ← Safe Domain Gating post-processor
+    └── Runner (InMemorySession)  ← Conversational agent runner
 ```
 
-The system is composed of two independently deployable packages:
+The system is composed of three key components:
 
 **1. `vipassana-course-discovery-mcp`** — A custom MCP server that scrapes `schedule.vridhamma.org` and exposes three tools:
 - `list_courses(center, language, course_type)` — returns upcoming courses with dates, status, and `apply_url`
@@ -43,6 +45,11 @@ The system is composed of two independently deployable packages:
 - Detects the user's language and routes queries appropriately
 - Applies a two-layer security filter before any response is shown
 
+**3. Streamlit Web Client** — A premium, responsive front-end interface that:
+- Supports real-time English and Vietnamese UI switching (defaulting to Vietnamese)
+- Persists session state and handles conversational agent responses
+- Containerized via `Dockerfile.streamlit` and deployable with one-click using `deploy_gcp.sh` to Google Cloud Run
+
 ---
 
 ## Course Concepts Demonstrated
@@ -50,11 +57,13 @@ The system is composed of two independently deployable packages:
 | Concept | How It's Used |
 |---|---|
 | **Google ADK** | `Agent`, `Runner`, `InMemorySessionService` for the chatbot |
+| **Streamlit Web UI** | Premium bilingual user interface with a real-time language switch button (defaulting to Vietnamese) |
 | **MCP Server** | Custom `vipassana-course-discovery-mcp` with three tools |
 | **Agent Skills** | `vipassana-ucenlist-knowledge` skill embedded as system prompt |
 | **Security / Safe Domain Gating** | Two-layer URL filtering (system prompt + `sanitize_urls()` post-processor) |
 | **Human-in-the-loop** | Agent provides `apply_url` but always delegates form completion to the user |
 | **Fallback strategy** | MCP server degrades gracefully: live scrape → 10min cache → 24h stale cache → fallback JSON |
+| **Deployment & Automation** | Automated docker build and script `deploy_gcp.sh` to deploy UI (Cloud Run) & Agent (Vertex AI Runtime) |
 
 ---
 
@@ -87,11 +96,11 @@ All 5 evaluations pass.
 
 ## Tech Stack
 
-- **Python 3.13** — `google-adk >= 2.3.0`, `mcp[cli] >= 1.28.1`, `python-dotenv`
-- **Model:** `gemini-2.0-flash` (configurable via `AGENT_MODEL` env var)
+- **Python 3.13** — `google-adk==2.3.0`, `mcp[cli]==1.28.1`, `streamlit==1.58.0`, `python-dotenv==1.2.2`
+- **Model:** `gemini-3.5-flash` (configurable via `AGENT_MODEL` env var)
 - **MCP transport:** stdio (standard for ADK `MCPToolset`)
-- **Scraping:** `httpx` + `BeautifulSoup4`, with optional Playwright for JS-rendered pages
-- **Package manager:** `uv`
+- **Scraping:** `httpx` + `BeautifulSoup4`
+- **Infrastructure:** Docker, Google Artifact Registry, Google Cloud Run, Google Vertex AI Agent Runtime
 
 ---
 
