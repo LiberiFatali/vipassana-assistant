@@ -76,6 +76,34 @@ class EmptyScheduleError(ScraperError):
 # ─── Public API ───────────────────────────────────────────────────────────────
 
 
+async def fetch_html(url: str) -> str:
+    """
+    GET a URL with the shared browser-like headers/timeout, mapping any
+    failure to ScraperError.
+
+    Raises:
+        ScraperError: If the site is unreachable or returns an error status.
+    """
+    try:
+        async with httpx.AsyncClient(
+            headers=HEADERS,
+            timeout=REQUEST_TIMEOUT,
+            follow_redirects=True,
+        ) as client:
+            response = await client.get(url)
+            response.raise_for_status()
+    except httpx.TimeoutException as e:
+        raise ScraperError(f"Request timed out fetching {url}: {e}") from e
+    except httpx.HTTPStatusError as e:
+        raise ScraperError(
+            f"HTTP {e.response.status_code} fetching {url}"
+        ) from e
+    except httpx.RequestError as e:
+        raise ScraperError(f"Network error fetching {url}: {e}") from e
+
+    return response.text
+
+
 async def fetch_courses(
     center_id: Literal["virocana", "vutthi"],
     language: Literal["vi", "en"] = "vi",
@@ -95,25 +123,8 @@ async def fetch_courses(
         EmptyScheduleError: If the page loads but rows are JS-rendered (empty tbody).
     """
     url = VRI_SCHEDULE_URLS[center_id][language]
-
-    try:
-        async with httpx.AsyncClient(
-            headers=HEADERS,
-            timeout=REQUEST_TIMEOUT,
-            follow_redirects=True,
-        ) as client:
-            response = await client.get(url)
-            response.raise_for_status()
-    except httpx.TimeoutException as e:
-        raise ScraperError(f"Request timed out fetching {url}: {e}") from e
-    except httpx.HTTPStatusError as e:
-        raise ScraperError(
-            f"HTTP {e.response.status_code} fetching {url}"
-        ) from e
-    except httpx.RequestError as e:
-        raise ScraperError(f"Network error fetching {url}: {e}") from e
-
-    return parse_course_table(response.text, center_id)
+    html = await fetch_html(url)
+    return parse_course_table(html, center_id)
 
 
 # ─── HTML Parsing ─────────────────────────────────────────────────────────────

@@ -33,28 +33,3 @@ CENTERS: dict[str, dict] = {
         "maps_url": None,
     },
 }
-
-# Human-readable aliases
-CENTER_ALIASES: dict[str, str] = {
-    # Vietnamese
-    "hà nội": "virocana",
-    "ha noi": "virocana",
-    "hanoi": "virocana",
-    "hn": "virocana",
-    "hồ chí minh": "vutthi",
-    "ho chi minh": "vutthi",
-    "hcm": "vutthi",
-    "tp hcm": "vutthi",
-    "sài gòn": "vutthi",
-    "sai gon": "vutthi",
-    # Center names
-    "virocana": "virocana",
-    "dhamma virocana": "virocana",
-    "vutthi": "vutthi",
-    "dhamma vutthi": "vutthi",
-}
-
-
-def resolve_center(name: str) -> str | None:
-    """Resolve a center name/alias to its canonical ID ('virocana' or 'vutthi')."""
-    return CENTER_ALIASES.get(name.strip().lower())

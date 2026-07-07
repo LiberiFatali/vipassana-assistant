@@ -13,35 +13,34 @@ The Vipassana UCENLIST Chatbot Agent — a bilingual AI assistant for querying V
 ## Setup
 
 ```bash
-# 1. Create virtual environment with uv
-cd chatbot-agent
+# 1. Create virtual environment with uv (from repo root)
 uv venv
 source .venv/bin/activate
 
 # 2. Install the chatbot agent dependencies
 uv pip install -e .
 
-# 3. Install and register the MCP server (from sibling directory)
-cd ../vipassana-course-discovery-mcp
+# 3. Install and register the MCP server (separate package, sibling directory)
+cd vipassana-course-discovery-mcp
 pip install -e .
+cd ..
 
 # 4. Set up API credentials
-cd ../chatbot-agent
-cp .env.example .env
-# Edit .env and add your GOOGLE_API_KEY
+cp chatbot_agent/.env.example chatbot_agent/.env
+# Edit chatbot_agent/.env and add your GOOGLE_API_KEY
 ```
 
 ## Running
 
 ```bash
 source .venv/bin/activate
-python chatbot_agent.py
+python -m chatbot_agent.cli_chatbot_agent
 ```
 
 ## Running Evaluations
 
 ```bash
-python eval_agent.py
+python chatbot_agent/eval_agent.py
 ```
 
 Evaluations test:
@@ -54,7 +53,7 @@ Evaluations test:
 ## Architecture
 
 ```
-chatbot_agent.py
+chatbot_agent/cli_chatbot_agent.py
 ├── KNOWLEDGE_SYSTEM_PROMPT   # vipassana-ucenlist-knowledge skill (embedded)
 ├── create_mcp_toolset()      # connects to vipassana-course-discovery-mcp via stdio
 ├── create_agent()            # Google ADK Agent with model, tools, and system prompt

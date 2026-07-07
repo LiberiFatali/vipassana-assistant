@@ -31,6 +31,9 @@ MANIFEST
 pip-log.txt
 pip-delete-this-directory.txt
 
+# ADK runtime session data
+.adk/
+
 # Unit test / coverage reports
 htmlcov/
 .tox/

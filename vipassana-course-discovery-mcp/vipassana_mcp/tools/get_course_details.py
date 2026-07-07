@@ -9,10 +9,9 @@ from __future__ import annotations
 
 from typing import Annotated
 
-import httpx
 from bs4 import BeautifulSoup
 
-from vipassana_mcp.scraper.vri_schedule import HEADERS, REQUEST_TIMEOUT
+from vipassana_mcp.scraper.vri_schedule import ScraperError, fetch_html
 
 
 async def get_course_details(
@@ -39,25 +38,14 @@ async def get_course_details(
         }
 
     try:
-        async with httpx.AsyncClient(
-            headers=HEADERS,
-            timeout=REQUEST_TIMEOUT,
-            follow_redirects=True,
-        ) as client:
-            response = await client.get(apply_url)
-            response.raise_for_status()
-    except httpx.HTTPStatusError as e:
+        html = await fetch_html(apply_url)
+    except ScraperError as e:
         return {
             "apply_url": apply_url,
-            "error": f"HTTP {e.response.status_code} fetching course details.",
-        }
-    except httpx.RequestError as e:
-        return {
-            "apply_url": apply_url,
-            "error": f"Network error: {e}",
+            "error": str(e),
         }
 
-    return _parse_detail_page(response.text, apply_url)
+    return _parse_detail_page(html, apply_url)
 
 
 def _parse_detail_page(html: str, apply_url: str) -> dict:

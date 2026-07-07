@@ -3,6 +3,5 @@ from .cli_chatbot_agent import (
     sanitize_urls,
     KNOWLEDGE_SYSTEM_PROMPT,
     create_agent,
+    load_knowledge_base,
 )
-
-root_agent = create_agent()
