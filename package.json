@@ -1,0 +1,17 @@
+{
+  "name": "vipassana-ucenlist-agent",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Bilingual Vipassana UCENLIST chatbot agent deployed on Vercel with OpenCode Zen LLM access.",
+  "scripts": {
+    "test": "node --test tests/*"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "cheerio": "^1.2.0",
+    "zod": "^4.4.3"
+  }
+}

@@ -35,10 +35,10 @@ The UI SHALL direct users to the official registration site when they request co
 - **WHEN** the user asks to register and the agent returns a registration link
 - **THEN** the UI SHALL prompt the user to complete their registration on the official website with a link to the official URL.
 
-### Requirement: Docker Deployment Setup
-The application configuration SHALL support running the Streamlit app in a containerized environment.
+### Requirement: Vercel Static Hosting
+The application SHALL serve the chat UI as a static frontend hosted by Vercel from the `public/` directory, requiring no application server or container.
 
-#### Scenario: Deploy to Cloud Run
-- **WHEN** the Docker container is built and run with default environment variables
-- **THEN** the Streamlit server SHALL start and listen on port 8080 or a port defined by the PORT environment variable.
+#### Scenario: Serve the chat page
+- **WHEN** a user opens the deployed application root URL
+- **THEN** Vercel serves `public/index.html` with its bundled assets, and the page is usable without any additional server process.
 

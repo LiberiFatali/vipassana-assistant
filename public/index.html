@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vipassana UCENLIST Chatbot</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --bg-2: #1e293b;
+      --bg-3: #334155;
+      --text: #e2e8f0;
+      --text-dim: #94a3b8;
+      --accent: #4f9cf9;
+      --accent-2: #34d399;
+      --danger: #f87171;
+      --user-bubble: #1d4ed8;
+      --agent-bubble: #334155;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 20px;
+      background: var(--bg-2);
+      border-bottom: 1px solid var(--bg-3);
+      flex-wrap: wrap;
+    }
+    header h1 {
+      font-size: 18px;
+      margin: 0;
+      font-weight: 600;
+    }
+    header .subtitle { font-size: 13px; color: var(--text-dim); margin-top: 2px; }
+    .controls { display: flex; align-items: center; gap: 10px; }
+    .lang-toggle { display: inline-flex; border: 1px solid var(--bg-3); border-radius: 8px; overflow: hidden; }
+    .lang-toggle button {
+      background: transparent; color: var(--text-dim); border: none;
+      padding: 7px 14px; cursor: pointer; font-size: 14px;
+    }
+    .lang-toggle button.active { background: var(--bg-3); color: var(--text); }
+    .btn {
+      background: var(--bg-3); color: var(--text); border: none;
+      border-radius: 8px; padding: 7px 14px; cursor: pointer; font-size: 14px;
+    }
+    .btn:hover { background: var(--bg-2); }
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      max-width: 860px;
+      width: 100%;
+      margin: 0 auto;
+      overflow: hidden;
+    }
+    #chat {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .message { display: flex; }
+    .message.user { justify-content: flex-end; }
+    .bubble {
+      max-width: 78%;
+      padding: 11px 15px;
+      border-radius: 14px;
+      line-height: 1.55;
+      font-size: 15px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .message.user .bubble { background: var(--user-bubble); border-bottom-right-radius: 4px; }
+    .message.agent .bubble { background: var(--agent-bubble); border-bottom-left-radius: 4px; }
+    .message.agent .bubble a { color: var(--accent-2); }
+    .message.agent .bubble a:visited { color: var(--accent-2); }
+    .bubble.rendered { white-space: normal; }
+    .bubble.rendered p { margin: 6px 0; }
+    .bubble.rendered p:first-child { margin-top: 0; }
+    .bubble.rendered p:last-child { margin-bottom: 0; }
+    .bubble.rendered h2, .bubble.rendered h3, .bubble.rendered h4,
+    .bubble.rendered h5, .bubble.rendered h6 { margin: 12px 0 6px; line-height: 1.3; }
+    .bubble.rendered h2 { font-size: 17px; }
+    .bubble.rendered h3 { font-size: 16px; }
+    .bubble.rendered h4, .bubble.rendered h5, .bubble.rendered h6 { font-size: 15px; }
+    .bubble.rendered table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 13px; }
+    .bubble.rendered th, .bubble.rendered td { border: 1px solid var(--bg-3); padding: 6px 10px; text-align: left; }
+    .bubble.rendered th { background: var(--bg-3); }
+    .bubble.rendered code { background: var(--bg-3); padding: 1px 5px; border-radius: 5px; font-size: 13px; }
+    .bubble.rendered ul, .bubble.rendered ol { margin: 6px 0; padding-left: 22px; }
+    .bubble.rendered li { margin: 3px 0; }
+    .bubble.rendered blockquote { margin: 8px 0; padding: 2px 12px; border-left: 3px solid var(--accent); color: var(--text-dim); }
+    .bubble.rendered blockquote p { margin: 4px 0; }
+    .bubble.rendered hr { border: none; border-top: 1px solid var(--bg-3); margin: 10px 0; }
+    .bubble.rendered .link-removed {
+      color: #fcd34d; background: #422006; padding: 1px 6px; border-radius: 5px; font-size: 13px;
+    }
+    .thinking { color: var(--text-dim); font-size: 14px; font-style: italic; }
+    .thinking .dots::after { content: ""; animation: dots 1.4s infinite steps(4, end); }
+    @keyframes dots {
+      0% { content: ""; }
+      25% { content: "."; }
+      50% { content: ".."; }
+      75% { content: "..."; }
+      100% { content: ""; }
+    }
+    .banner {
+      background: #422006;
+      border: 1px solid #78350f;
+      color: #fcd34d;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    #composer {
+      border-top: 1px solid var(--bg-3);
+      padding: 14px 16px;
+      background: var(--bg-2);
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+    }
+    #input {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--bg-3);
+      color: var(--text);
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-size: 15px;
+      resize: none;
+      min-height: 24px;
+      max-height: 150px;
+      line-height: 1.4;
+    }
+    #input:focus { outline: none; border-color: var(--accent); }
+    #send {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 12px 20px;
+      font-size: 15px;
+      cursor: pointer;
+    }
+    #send:disabled { opacity: 0.5; cursor: not-allowed; }
+    footer {
+      border-top: 1px solid var(--bg-3);
+      background: var(--bg-2);
+      padding: 16px 20px;
+      font-size: 13px;
+      color: var(--text-dim);
+    }
+    footer .section-title { font-weight: 600; color: var(--text); margin-bottom: 8px; }
+    footer .centers { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 10px; }
+    footer .center { background: var(--bg); border: 1px solid var(--bg-3); border-radius: 10px; padding: 10px 14px; flex: 1 1 300px; }
+    footer .center h3 { margin: 0 0 4px; font-size: 14px; color: var(--accent-2); }
+    footer a { color: var(--accent); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+    footer .official { margin-top: 6px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>🧘 Vipassana UCENLIST Chatbot</h1>
+      <div class="subtitle" data-i18n="subtitle">Trợ lý song ngữ về thiền Vipassana tại UCENLIST (Việt Nam)</div>
+    </div>
+    <div class="controls">
+      <div class="lang-toggle" role="group" aria-label="Language">
+        <button id="lang-vi" class="active" type="button">VI</button>
+        <button id="lang-en" type="button">EN</button>
+      </div>
+      <button id="clear" class="btn" type="button" data-i18n="clear">Xóa lịch sử</button>
+    </div>
+  </header>
+
+  <main>
+    <div id="chat" aria-live="polite"></div>
+    <div id="composer">
+      <textarea id="input" rows="1" data-i18n-ph="placeholder" placeholder="Hỏi về khóa thiền, lịch khai giảng, hoặc nội quy giới luật..."></textarea>
+      <button id="send" type="button" data-i18n="send">Gửi</button>
+    </div>
+  </main>
+
+  <footer>
+    <div class="section-title" data-i18n="centersTitle">Trung tâm &amp; Liên kết chính thức</div>
+    <div class="centers">
+      <div class="center">
+        <h3>Dhamma Virocana</h3>
+        <div>Số 15-17 ngõ Sala, đường Đồng Đò, thôn Minh Tân, xã Kim Anh, Hà Nội</div>
+        <div>+84 966 894 936 · contact.virocana@vridhamma.org</div>
+        <div class="official"><a href="https://virocana.vridhamma.org/vi" target="_blank" rel="noopener noreferrer">virocana.vridhamma.org</a> · <a href="https://schedule.vridhamma.org/vi/courses/virocana" target="_blank" rel="noopener noreferrer" data-i18n="schedule">Lịch khóa thiền</a></div>
+      </div>
+      <div class="center">
+        <h3>Dhamma Vutthi</h3>
+        <div>112, đường 628, ấp Trại Đèn, Phước Hiệp, Củ Chi, TP. Hồ Chí Minh</div>
+        <div>+84 942 255 050 · contact.vutthi@vridhamma.org</div>
+        <div class="official"><a href="https://vutthi.vridhamma.org/vi" target="_blank" rel="noopener noreferrer">vutthi.vridhamma.org</a> · <a href="https://schedule.vridhamma.org/vi/courses/vutthi" target="_blank" rel="noopener noreferrer" data-i18n="schedule">Lịch khóa thiền</a></div>
+      </div>
+    </div>
+    <div class="official">
+      <span data-i18n="official">Trang chính thức:</span>
+      <a href="https://ucenlist.org" target="_blank" rel="noopener noreferrer">ucenlist.org</a> ·
+      <a href="https://schedule.vridhamma.org" target="_blank" rel="noopener noreferrer">schedule.vridhamma.org</a>
+    </div>
+  </footer>
+
+  <script type="module">
+    import { renderMarkdown } from "./markdown.js";
+    (function () {
+      "use strict";
+
+      const MAX_MESSAGES = 20;
+      const STORAGE_KEY = "vipassana_chat_history";
+      const langKey = "vipassana_chat_lang";
+
+      const I18N = {
+        vi: {
+          subtitle: "Trợ lý song ngữ về thiền Vipassana tại UCENLIST (Việt Nam)",
+          clear: "Xóa lịch sử",
+          send: "Gửi",
+          placeholder: "Hỏi về khóa thiền, lịch khai giảng, hoặc nội quy giới luật...",
+          centersTitle: "Trung tâm &amp; Liên kết chính thức",
+          schedule: "Lịch khóa thiền",
+          official: "Trang chính thức:",
+          thinking: "Đang suy nghĩ",
+          error: "Xin lỗi, đã có lỗi xảy ra khi xử lý yêu cầu của bạn. Vui lòng thử lại sau.",
+          welcome: "Chào bạn! Tôi là trợ lý về khóa thiền Vipassana của UCENLIST. Hãy hỏi tôi về Vipassana, S.N. Goenka, nội quy giới luật, thời khóa biểu, hoặc lịch khai giảng các khóa thiền sắp tới tại Hà Nội và TP. Hồ Chí Minh.",
+        },
+        en: {
+          subtitle: "Bilingual assistant about Vipassana meditation at UCENLIST (Vietnam)",
+          clear: "Clear chat",
+          send: "Send",
+          placeholder: "Ask about courses, schedules, or the Code of Discipline...",
+          centersTitle: "Centers &amp; Official Links",
+          schedule: "Course schedule",
+          official: "Official sites:",
+          thinking: "Thinking",
+          error: "Sorry, something went wrong while processing your request. Please try again later.",
+          welcome: "Hello! I am the Vipassana course assistant for UCENLIST. Ask me about Vipassana, S.N. Goenka, the Code of Discipline, the daily timetable, or upcoming course schedules in Hanoi and Ho Chi Minh City.",
+        },
+      };
+
+      const langToggle = {
+        vi: document.getElementById("lang-vi"),
+        en: document.getElementById("lang-en"),
+      };
+      const chatEl = document.getElementById("chat");
+      const inputEl = document.getElementById("input");
+      const sendBtn = document.getElementById("send");
+      const clearBtn = document.getElementById("clear");
+
+      let lang = localStorage.getItem(langKey) || "vi";
+      let history = loadHistory();
+
+      function loadHistory() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          const parsed = raw ? JSON.parse(raw) : [];
+          return Array.isArray(parsed) ? parsed.slice(-MAX_MESSAGES) : [];
+        } catch (e) {
+          return [];
+        }
+      }
+
+      function saveHistory() {
+        history = history.slice(-MAX_MESSAGES);
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+        } catch (e) {
+          /* storage full/unavailable — keep in-memory history */
+        }
+      }
+
+      function applyLang() {
+        const t = I18N[lang];
+        document.documentElement.lang = lang === "vi" ? "vi" : "en";
+        langToggle.vi.classList.toggle("active", lang === "vi");
+        langToggle.en.classList.toggle("active", lang === "en");
+        document.querySelectorAll("[data-i18n]").forEach((el) => {
+          el.innerHTML = t[el.getAttribute("data-i18n")] || el.innerHTML;
+        });
+        document.querySelectorAll("[data-i18n-ph]").forEach((el) => {
+          el.setAttribute("placeholder", t[el.getAttribute("data-i18n-ph")] || el.getAttribute("placeholder"));
+        });
+      }
+
+      function addMessage(role, content) {
+        const wrap = document.createElement("div");
+        wrap.className = "message " + role;
+        const bubble = document.createElement("div");
+        bubble.className = "bubble";
+        if (role === "agent") {
+          // Agent output is markdown: escape-first rendering, with links gated
+          // to trusted domains by public/markdown.js (matches server-side
+          // sanitize_urls() contract).
+          bubble.classList.add("rendered");
+          bubble.innerHTML = renderMarkdown(content);
+        } else {
+          // User input stays plain text.
+          bubble.textContent = content;
+        }
+        wrap.appendChild(bubble);
+        chatEl.appendChild(wrap);
+        chatEl.scrollTop = chatEl.scrollHeight;
+      }
+
+      function addThinking() {
+        const wrap = document.createElement("div");
+        wrap.className = "message agent";
+        const el = document.createElement("div");
+        el.className = "thinking";
+        el.dataset.thinking = "1";
+        el.textContent = I18N[lang].thinking + " ";
+        const dots = document.createElement("span");
+        dots.className = "dots";
+        el.appendChild(dots);
+        wrap.appendChild(el);
+        chatEl.appendChild(wrap);
+        chatEl.scrollTop = chatEl.scrollHeight;
+        return wrap;
+      }
+
+      function removeThinking() {
+        const el = chatEl.querySelector('[data-thinking="1"]');
+        if (el) el.parentElement.remove();
+      }
+
+      async function sendMessage() {
+        const content = inputEl.value.trim();
+        if (!content || sendBtn.disabled) return;
+
+        inputEl.value = "";
+        autoGrow();
+
+        addMessage("user", content);
+        history.push({ role: "user", content });
+        saveHistory();
+
+        sendBtn.disabled = true;
+        const thinkingEl = addThinking();
+
+        try {
+          const res = await fetch("/api/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ messages: history.slice(-MAX_MESSAGES) }),
+          });
+          const data = await res.json();
+          const text = (data && typeof data.text === "string" && data.text)
+            ? data.text
+            : (data && data.error) ? data.error : I18N[lang].error;
+
+          removeThinking();
+          addMessage("agent", text);
+          history.push({ role: "assistant", content: text });
+          saveHistory();
+        } catch (err) {
+          removeThinking();
+          const text = I18N[lang].error;
+          addMessage("agent", text);
+          history.push({ role: "assistant", content: text });
+          saveHistory();
+        } finally {
+          sendBtn.disabled = false;
+          inputEl.focus();
+        }
+      }
+
+      function autoGrow() {
+        inputEl.style.height = "auto";
+        inputEl.style.height = Math.min(inputEl.scrollHeight, 150) + "px";
+      }
+
+      function init() {
+        applyLang();
+        if (history.length === 0) {
+          addMessage("agent", I18N[lang].welcome);
+        } else {
+          history.forEach((m) => addMessage(m.role === "user" ? "user" : "agent", m.content));
+        }
+        inputEl.focus();
+      }
+
+      function clearChat() {
+        history = [];
+        saveHistory();
+        chatEl.innerHTML = "";
+        addMessage("agent", I18N[lang].welcome);
+      }
+
+      langToggle.vi.addEventListener("click", () => { lang = "vi"; localStorage.setItem(langKey, "vi"); applyLang(); });
+      langToggle.en.addEventListener("click", () => { lang = "en"; localStorage.setItem(langKey, "en"); applyLang(); });
+      sendBtn.addEventListener("click", sendMessage);
+      inputEl.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          sendMessage();
+        }
+      });
+      inputEl.addEventListener("input", autoGrow);
+      clearBtn.addEventListener("click", clearChat);
+
+      init();
+    })();
+  </script>
+</body>
+</html>

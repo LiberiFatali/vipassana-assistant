@@ -1,5 +1,6 @@
 # Specification: Course Discovery
 
+## Purpose
 The Course Discovery capability enables live retrieval of upcoming Vipassana courses and center details from the UCENLIST organization websites.
 
 ## Requirements

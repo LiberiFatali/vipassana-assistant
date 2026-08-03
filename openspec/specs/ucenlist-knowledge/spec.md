@@ -1,5 +1,6 @@
 # Specification: UCENLIST Knowledge
 
+## Purpose
 The UCENLIST knowledge capability encapsulates Vipassana meditation course information, center details, rules, and contact info for the chatbot agent.
 
 ## Requirements

@@ -1,7 +1,0 @@
-{
-  "remote_agent_runtime_id": "projects/120022961644/locations/asia-southeast1/reasoningEngines/7945458050402353152",
-  "deployment_target": "agent_runtime",
-  "is_a2a": true,
-  "agent_directory": "chatbot_agent",
-  "deployment_timestamp": "2026-06-29T06:23:16.019315+00:00"
-}

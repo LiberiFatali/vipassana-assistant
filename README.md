@@ -1,68 +1,78 @@
 # vipassana-ucenlist-agent
 
-The Vipassana UCENLIST Chatbot Agent — a bilingual AI assistant for querying Vipassana meditation course information and live schedules at UCENLIST centers in Vietnam.
+The Vipassana UCENLIST Chatbot — a bilingual (Vietnamese/English) AI assistant for Vipassana meditation course information and live schedules at UCENLIST centers in Vietnam. Deployed as a Vercel project (Node.js serverless functions + static frontend), using OpenCode Zen for free LLM access.
 
 ## Features
 
 - **Bilingual**: responds in Vietnamese or English based on the user's language
-- **Static knowledge**: information about Vipassana, S.N. Goenka, Code of Discipline, daily timetable, and UCENLIST organization
-- **Live course discovery**: queries `vipassana-course-discovery-mcp` for upcoming course schedules at Dhamma Virocana (Hà Nội) and Dhamma Vutthi (HCMC)
-- **Secure**: Safe Domain Gating — only `ucenlist.org` and `*.vridhamma.org` links are ever shared
+- **Static knowledge**: loads `.agents/skills/vipassana-ucenlist-knowledge/SKILL.md` at runtime for information about Vipassana, S.N. Goenka, Code of Discipline, daily timetable, and UCENLIST organization
+- **Live course discovery**: `list_courses` scrapes `schedule.vridhamma.org` (live → cached → fallback JSON, with `data_freshness` on every record)
+- **Secure**: Safe Domain Gating — only `ucenlist.org` and `*.vridhamma.org` links are ever shared (system prompt instruction + `sanitize_urls()` post-processor)
 - **Human-in-the-loop**: registration is always delegated to the user via the official VRI link
+
+## Requirements
+
+- Node.js >= 20
+- An OpenCode Zen API key (sign in at https://opencode.ai/auth and copy the key; free models need no credit card)
 
 ## Setup
 
 ```bash
-# 1. Create virtual environment with uv (from repo root)
-uv venv
-source .venv/bin/activate
+npm install
 
-# 2. Install the chatbot agent dependencies
-uv pip install -e .
-
-# 3. Install and register the MCP server (separate package, sibling directory)
-cd vipassana-course-discovery-mcp
-pip install -e .
-cd ..
-
-# 4. Set up API credentials
-cp chatbot_agent/.env.example chatbot_agent/.env
-# Edit chatbot_agent/.env and add your GOOGLE_API_KEY
+# Set up credentials
+#   OPENCODE_API_KEY — required (OpenCode Zen API key, https://opencode.ai/auth)
+#   AGENT_MODEL      — optional (default deepseek-v4-flash-free)
+# For local dev, export them or create a .env file (e.g. via `vercel env`).
 ```
 
-## Running
+## Running locally
 
 ```bash
-source .venv/bin/activate
-python -m chatbot_agent.cli_chatbot_agent
+vercel dev
 ```
 
-## Running Evaluations
+Then open the printed URL (default `http://localhost:3000`). `vercel dev` serves the `public/` frontend and the `api/*` functions.
+
+## Running tests
 
 ```bash
-python chatbot_agent/eval_agent.py
+npm test            # runs node --test tests/*
 ```
 
-Evaluations test:
-- Domain gating (untrusted links are stripped)
-- Bilingual language routing
-- Fallback schedule warning
-- Human-in-the-loop registration handoff
-- Prompt injection defense
+Tests are static/no-network: domain gating (trusted/untrusted/spoof URLs), prompt-injection stripping, fallback-warning phrasing, human-in-the-loop phrasing, bilingual routing strings, plus smoke assertions on the knowledge loader, centers data, and fallback JSON shape. `tests/markdown.test.mjs` covers the UI renderer (markdown blocks, link gating, HTML escaping).
+
+## Deploying
+
+```bash
+vercel link                                  # link this directory to a Vercel project
+vercel env add OPENCODE_API_KEY              # production
+vercel env add AGENT_MODEL                   # optional
+vercel deploy --prod
+```
+
+Or import the repository into Vercel from GitHub — every push to the production branch deploys.
 
 ## Architecture
 
 ```
-chatbot_agent/cli_chatbot_agent.py
-├── KNOWLEDGE_SYSTEM_PROMPT   # vipassana-ucenlist-knowledge skill (embedded)
-├── create_mcp_toolset()      # connects to vipassana-course-discovery-mcp via stdio
-├── create_agent()            # Google ADK Agent with model, tools, and system prompt
-├── sanitize_urls()           # Safe Domain Gating post-processor (Blue Team check)
-└── main()                    # Interactive CLI session loop
+public/index.html        # single static chat UI (bilingual, dark theme, no build step)
+public/markdown.js       # zero-dependency markdown renderer (escape-first, trusted-domain-gated links)
+api/chat.js              # POST /api/chat — direct fetch tool loop to OpenCode Zen, returns sanitized { text }
+api/system-prompt.js     # KNOWLEDGE_SYSTEM_PROMPT (verbatim, {knowledge_base} placeholder)
+api/knowledge.js         # loads SKILL.md via import.meta.url
+api/sanitize.js          # TRUSTED_DOMAINS + sanitize_urls() — Safe Domain Gating backstop
+api/tools/               # list_courses, get_course_details, get_center_info (tool registry + zod parse)
+api/scraper/             # vri-schedule.js (fetch + cheerio), cache.js (TTL + fallback chain)
+lib/centers.js           # static center info
+lib/fallback-schedule.json  # static fallback schedule data
+tests/sanitize.test.mjs  # eval suite (node --test)
+tests/markdown.test.mjs  # renderer unit suite (node --test)
+vercel.json              # function maxDuration + region (sin1)
 ```
 
 ## Security
 
-The agent enforces two layers of domain gating:
+Two layers of domain gating:
 1. **System prompt instruction** — tells the LLM it must never output untrusted URLs
-2. **`sanitize_urls()` post-processor** — programmatically strips any URL that doesn't match `ucenlist.org` or `vridhamma.org` from every response before display
+2. **`sanitize_urls()` post-processor** — programmatically strips any URL that doesn't match `ucenlist.org` or `vridhamma.org` from every response before it is returned

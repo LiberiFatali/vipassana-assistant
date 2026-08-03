@@ -63,12 +63,13 @@ active_env/
 *.swp
 *.swo
 
+# Node.js
+node_modules/
+.vercel/
+
 # Local environment variables / secrets
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
 
 # OS generated files
 .DS_Store
