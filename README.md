@@ -5,7 +5,7 @@ The Vipassana UCENLIST Chatbot — a bilingual (Vietnamese/English) AI assistant
 ## Features
 
 - **Bilingual**: responds in Vietnamese or English based on the user's language
-- **Static knowledge**: loads `.agents/skills/vipassana-ucenlist-knowledge/SKILL.md` at runtime for information about Vipassana, S.N. Goenka, Code of Discipline, daily timetable, and UCENLIST organization
+- **Static knowledge**: loads `.agents/skills/vipassana-ucenlist-knowledge/SKILL.md` at runtime for information about Vipassana, Mr. S.N. Goenka, Code of Discipline, daily timetable, and UCENLIST organization
 - **Live course discovery**: `list_courses` scrapes `schedule.vridhamma.org` (live → cached → fallback JSON, with `data_freshness` on every record)
 - **Secure**: Safe Domain Gating — only `ucenlist.org` and `*.vridhamma.org` links are ever shared (system prompt instruction + `sanitize_urls()` post-processor)
 - **Human-in-the-loop**: registration is always delegated to the user via the official VRI link
