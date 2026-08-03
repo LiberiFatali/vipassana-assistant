@@ -29,10 +29,17 @@ npm install
 ## Running locally
 
 ```bash
-vercel dev
+npm run dev
 ```
 
-Then open the printed URL (default `http://localhost:3000`). `vercel dev` serves the `public/` frontend and the `api/*` functions.
+Then open `http://localhost:3000`. `server.js` serves the `public/` frontend and routes `POST /api/chat` to the function in `api/chat.js` — no Vercel CLI or build step needed. It loads `OPENCODE_API_KEY` from `.env` via Node's `--env-file` flag (Node ≥ 20.6).
+
+Prefer the Vercel CLI instead? Install it first:
+
+```bash
+npm i -g vercel
+vercel dev   # serves the same app on http://localhost:3000
+```
 
 ## Running tests
 
@@ -58,6 +65,7 @@ Or import the repository into Vercel from GitHub — every push to the productio
 ```
 public/index.html        # single static chat UI (bilingual, dark theme, no build step)
 public/markdown.js       # zero-dependency markdown renderer (escape-first, trusted-domain-gated links)
+server.js                # local dev server (npm run dev) — static public/ + routes /api/chat
 api/chat.js              # POST /api/chat — direct fetch tool loop to OpenCode Zen, returns sanitized { text }
 api/system-prompt.js     # KNOWLEDGE_SYSTEM_PROMPT (verbatim, {knowledge_base} placeholder)
 api/knowledge.js         # loads SKILL.md via import.meta.url

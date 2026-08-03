@@ -55,13 +55,16 @@
       border-radius: 8px; padding: 7px 14px; cursor: pointer; font-size: 14px;
     }
     .btn:hover { background: var(--bg-2); }
-    main {
+    .layout {
       flex: 1;
       display: flex;
+      min-height: 0;
+    }
+    main {
+      flex: 1;
+      min-width: 0;
+      display: flex;
       flex-direction: column;
-      max-width: 860px;
-      width: 100%;
-      margin: 0 auto;
       overflow: hidden;
     }
     #chat {
@@ -158,20 +161,28 @@
       cursor: pointer;
     }
     #send:disabled { opacity: 0.5; cursor: not-allowed; }
-    footer {
-      border-top: 1px solid var(--bg-3);
+    aside.sidebar {
+      flex: 0 0 300px;
+      min-width: 0;
+      border-right: 1px solid var(--bg-3);
       background: var(--bg-2);
       padding: 16px 20px;
       font-size: 13px;
       color: var(--text-dim);
+      overflow-y: auto;
     }
-    footer .section-title { font-weight: 600; color: var(--text); margin-bottom: 8px; }
-    footer .centers { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 10px; }
-    footer .center { background: var(--bg); border: 1px solid var(--bg-3); border-radius: 10px; padding: 10px 14px; flex: 1 1 300px; }
-    footer .center h3 { margin: 0 0 4px; font-size: 14px; color: var(--accent-2); }
-    footer a { color: var(--accent); text-decoration: none; }
-    footer a:hover { text-decoration: underline; }
-    footer .official { margin-top: 6px; }
+    aside.sidebar .section-title { font-weight: 600; color: var(--text); margin-bottom: 12px; }
+    aside.sidebar .centers { display: flex; flex-direction: column; gap: 16px; }
+    aside.sidebar .center { background: var(--bg); border: 1px solid var(--bg-3); border-radius: 10px; padding: 10px 14px; }
+    aside.sidebar .center h3 { margin: 0 0 4px; font-size: 14px; color: var(--accent-2); }
+    aside.sidebar a { color: var(--accent); text-decoration: none; }
+    aside.sidebar a:hover { text-decoration: underline; }
+    aside.sidebar .official { margin-top: 6px; }
+    @media (max-width: 720px) {
+      .layout { flex-direction: column; }
+      aside.sidebar { order: 2; flex: none; border-right: none; border-top: 1px solid var(--bg-3); }
+      aside.sidebar .centers { flex-direction: column; }
+    }
   </style>
 </head>
 <body>
@@ -189,36 +200,34 @@
     </div>
   </header>
 
-  <main>
-    <div id="chat" aria-live="polite"></div>
-    <div id="composer">
-      <textarea id="input" rows="1" data-i18n-ph="placeholder" placeholder="Hỏi về khóa thiền, lịch khai giảng, hoặc nội quy giới luật..."></textarea>
-      <button id="send" type="button" data-i18n="send">Gửi</button>
-    </div>
-  </main>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="section-title" data-i18n="centersTitle">Trung tâm &amp; Liên kết chính thức</div>
+      <div class="centers">
+        <div class="center">
+          <h3>Dhamma Virocana</h3>
+          <div>Số 15-17 ngõ Sala, đường Đồng Đò, thôn Minh Tân, xã Kim Anh, Hà Nội</div>
+          <div>+84 966 894 936 · contact.virocana@vridhamma.org</div>
+          <div class="official"><a href="https://virocana.vridhamma.org/vi" target="_blank" rel="noopener noreferrer">virocana.vridhamma.org</a> · <a href="https://schedule.vridhamma.org/vi/courses/virocana" target="_blank" rel="noopener noreferrer" data-i18n="schedule">Lịch khóa thiền</a></div>
+        </div>
+        <div class="center">
+          <h3>Dhamma Vutthi</h3>
+          <div>112, đường 628, ấp Trại Đèn, Phước Hiệp, Củ Chi, TP. Hồ Chí Minh</div>
+          <div>+84 942 255 050 · contact.vutthi@vridhamma.org</div>
+          <div class="official"><a href="https://vutthi.vridhamma.org/vi" target="_blank" rel="noopener noreferrer">vutthi.vridhamma.org</a> · <a href="https://schedule.vridhamma.org/vi/courses/vutthi" target="_blank" rel="noopener noreferrer" data-i18n="schedule">Lịch khóa thiền</a></div>
+        </div>
+      </div>
+    </aside>
 
-  <footer>
-    <div class="section-title" data-i18n="centersTitle">Trung tâm &amp; Liên kết chính thức</div>
-    <div class="centers">
-      <div class="center">
-        <h3>Dhamma Virocana</h3>
-        <div>Số 15-17 ngõ Sala, đường Đồng Đò, thôn Minh Tân, xã Kim Anh, Hà Nội</div>
-        <div>+84 966 894 936 · contact.virocana@vridhamma.org</div>
-        <div class="official"><a href="https://virocana.vridhamma.org/vi" target="_blank" rel="noopener noreferrer">virocana.vridhamma.org</a> · <a href="https://schedule.vridhamma.org/vi/courses/virocana" target="_blank" rel="noopener noreferrer" data-i18n="schedule">Lịch khóa thiền</a></div>
+    <main>
+      <div id="chat" aria-live="polite"></div>
+      <div id="composer">
+        <textarea id="input" rows="1" data-i18n-ph="placeholder" placeholder="Hỏi về khóa thiền, lịch khai giảng, hoặc nội quy giới luật..."></textarea>
+        <button id="send" type="button" data-i18n="send">Gửi</button>
       </div>
-      <div class="center">
-        <h3>Dhamma Vutthi</h3>
-        <div>112, đường 628, ấp Trại Đèn, Phước Hiệp, Củ Chi, TP. Hồ Chí Minh</div>
-        <div>+84 942 255 050 · contact.vutthi@vridhamma.org</div>
-        <div class="official"><a href="https://vutthi.vridhamma.org/vi" target="_blank" rel="noopener noreferrer">vutthi.vridhamma.org</a> · <a href="https://schedule.vridhamma.org/vi/courses/vutthi" target="_blank" rel="noopener noreferrer" data-i18n="schedule">Lịch khóa thiền</a></div>
-      </div>
-    </div>
-    <div class="official">
-      <span data-i18n="official">Trang chính thức:</span>
-      <a href="https://ucenlist.org" target="_blank" rel="noopener noreferrer">ucenlist.org</a> ·
-      <a href="https://schedule.vridhamma.org" target="_blank" rel="noopener noreferrer">schedule.vridhamma.org</a>
-    </div>
-  </footer>
+    </main>
+  </div>
+
 
   <script type="module">
     import { renderMarkdown } from "./markdown.js";
@@ -237,7 +246,6 @@
           placeholder: "Hỏi về khóa thiền, lịch khai giảng, hoặc nội quy giới luật...",
           centersTitle: "Trung tâm &amp; Liên kết chính thức",
           schedule: "Lịch khóa thiền",
-          official: "Trang chính thức:",
           thinking: "Đang suy nghĩ",
           error: "Xin lỗi, đã có lỗi xảy ra khi xử lý yêu cầu của bạn. Vui lòng thử lại sau.",
           welcome: "Chào bạn! Tôi là trợ lý về khóa thiền Vipassana của UCENLIST. Hãy hỏi tôi về Vipassana, S.N. Goenka, nội quy giới luật, thời khóa biểu, hoặc lịch khai giảng các khóa thiền sắp tới tại Hà Nội và TP. Hồ Chí Minh.",
@@ -249,7 +257,6 @@
           placeholder: "Ask about courses, schedules, or the Code of Discipline...",
           centersTitle: "Centers &amp; Official Links",
           schedule: "Course schedule",
-          official: "Official sites:",
           thinking: "Thinking",
           error: "Sorry, something went wrong while processing your request. Please try again later.",
           welcome: "Hello! I am the Vipassana course assistant for UCENLIST. Ask me about Vipassana, S.N. Goenka, the Code of Discipline, the daily timetable, or upcoming course schedules in Hanoi and Ho Chi Minh City.",
