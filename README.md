@@ -2,6 +2,8 @@
 
 The Vipassana UCENLIST Chatbot — a bilingual (Vietnamese/English) AI assistant for Vipassana meditation course information and live schedules at UCENLIST centers in Vietnam. Deployed as a Vercel project (Node.js serverless functions + static frontend), using OpenCode Zen for free LLM access.
 
+> **For contributors**: `AGENTS.md` is the canonical guide for agent tools — architecture, request flow, security model, and the spec-driven workflow.
+
 ## Features
 
 - **Bilingual**: responds in Vietnamese or English based on the user's language
@@ -23,6 +25,7 @@ npm install
 # Set up credentials
 #   OPENCODE_API_KEY — required (OpenCode Zen API key, https://opencode.ai/auth)
 #   AGENT_MODEL      — optional (default deepseek-v4-flash-free)
+#   FAST_MODEL       — optional, fast-path only (default mimo-v2.5-free)
 # For local dev, export them or create a .env file (e.g. via `vercel env`).
 ```
 
@@ -47,7 +50,7 @@ vercel dev   # serves the same app on http://localhost:3000
 npm test            # runs node --test tests/*
 ```
 
-Tests are static/no-network: domain gating (trusted/untrusted/spoof URLs), prompt-injection stripping, fallback-warning phrasing, human-in-the-loop phrasing, bilingual routing strings, plus smoke assertions on the knowledge loader, centers data, and fallback JSON shape. `tests/markdown.test.mjs` covers the UI renderer (markdown blocks, link gating, HTML escaping).
+Tests are static/no-network: domain gating (trusted/untrusted/spoof URLs), prompt-injection stripping, fallback-warning phrasing, human-in-the-loop phrasing, bilingual routing strings, plus smoke assertions on the knowledge loader, centers data, and fallback JSON shape. `tests/markdown.test.mjs` covers the UI renderer (markdown blocks, link gating, HTML escaping). `tests/router.test.mjs` and `tests/sections.test.mjs` cover the intent router and knowledge sectioning, and `tests/chat-path.test.mjs` verifies the fast/tool paths with a stubbed fetch (no network).
 
 ## Deploying
 
@@ -55,6 +58,7 @@ Tests are static/no-network: domain gating (trusted/untrusted/spoof URLs), promp
 vercel link                                  # link this directory to a Vercel project
 vercel env add OPENCODE_API_KEY              # production
 vercel env add AGENT_MODEL                   # optional
+vercel env add FAST_MODEL                    # optional — faster model for the KB fast path
 vercel deploy --prod
 ```
 
@@ -66,9 +70,13 @@ Or import the repository into Vercel from GitHub — every push to the productio
 public/index.html        # single static chat UI (bilingual, dark theme, no build step)
 public/markdown.js       # zero-dependency markdown renderer (escape-first, trusted-domain-gated links)
 server.js                # local dev server (npm run dev) — static public/ + routes /api/chat
-api/chat.js              # POST /api/chat — direct fetch tool loop to OpenCode Zen, returns sanitized { text }
-api/system-prompt.js     # KNOWLEDGE_SYSTEM_PROMPT (verbatim, {knowledge_base} placeholder)
+api/chat.js              # POST /api/chat — intent router → fast path or tool loop → sanitized { text }
+api/router.js            # bilingual (EN/VI) intent router: knowledge-only vs live-data (+ tiny LLM fallback)
+api/quick-answers.js     # deterministic no-LLM answers (center info, Vipassana definition) for the fast path
+api/answer-cache.js      # in-memory TTL cache for repeated fast-path answers
+api/sections.js          # SKILL.md sectioning + fast-path prompt builder (trimmed knowledge context)
 api/knowledge.js         # loads SKILL.md via import.meta.url
+api/system-prompt.js     # KNOWLEDGE_SYSTEM_PROMPT (verbatim, {knowledge_base} placeholder)
 api/sanitize.js          # TRUSTED_DOMAINS + sanitize_urls() — Safe Domain Gating backstop
 api/tools/               # list_courses, get_course_details, get_center_info (tool registry + zod parse)
 api/scraper/             # vri-schedule.js (fetch + cheerio), cache.js (TTL + fallback chain)
@@ -76,6 +84,11 @@ lib/centers.js           # static center info
 lib/fallback-schedule.json  # static fallback schedule data
 tests/sanitize.test.mjs  # eval suite (node --test)
 tests/markdown.test.mjs  # renderer unit suite (node --test)
+tests/router.test.mjs    # intent-router unit suite (node --test)
+tests/sections.test.mjs  # knowledge sectioning + fast-path prompt suite (node --test)
+tests/chat-path.test.mjs # request-path integration suite (stubbed fetch)
+tests/quick-answers.test.mjs # deterministic-answer suite (node --test)
+tests/answer-cache.test.mjs  # answer-cache suite (node --test)
 vercel.json              # function maxDuration + region (sin1)
 ```
 
