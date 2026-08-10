@@ -366,6 +366,23 @@ test("deterministic quick-answer short-circuits to done with no LLM call", async
   assert.equal(events.filter((e) => e.event === "delta").length, 0, "no deltas on short-circuit");
 });
 
+test("out-of-scope question short-circuits to done with no LLM call", async () => {
+  answerCache.clear();
+  requests.length = 0;
+  responses.length = 0;
+  responses.push([]);
+
+  const res = await streamPost([{ role: "user", content: "Is there a meditation group in Hanoi?" }]);
+  const events = await readEvents(res);
+
+  assert.equal(requests.length, 0, "no LLM call for an out-of-scope question");
+  const done = events.find((e) => e.event === "done");
+  assert.ok(done, "done event present");
+  assert.ok(done.data.text.includes("info@ucenlist.org"), "fallback mentions the contact email");
+  assert.equal(events.filter((e) => e.event === "delta").length, 0, "no deltas on short-circuit");
+  assert.equal(events.filter((e) => e.event === "status").length, 0, "no status events on short-circuit");
+});
+
 test("cache hit short-circuits to done with no LLM call", async () => {
   answerCache.clear();
   requests.length = 0;

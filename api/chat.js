@@ -16,9 +16,10 @@ import { KNOWLEDGE_SYSTEM_PROMPT } from "../lib/system-prompt.js";
 import { loadKnowledgeBase } from "../lib/knowledge.js";
 import { sanitize_urls } from "../lib/sanitize.js";
 import { classifyIntent } from "../lib/router.js";
-import { normalize } from "../lib/router.js";
+import { detectLanguage, normalize } from "../lib/router.js";
 import { buildFastPathSystemPrompt } from "../lib/sections.js";
 import { getQuickAnswer } from "../lib/quick-answers.js";
+import { getOutOfScopeAnswer } from "../lib/out-of-scope.js";
 import { getScheduleAnswer } from "../lib/schedule-answers.js";
 import { answerCache } from "../lib/answer-cache.js";
 import { getCenterInfo, getCenterInfoInputSchema } from "../lib/tools/get-center-info.js";
@@ -214,6 +215,13 @@ async function generateAgentResponse(messages) {
   const lastUser = [...messages].reverse().find((m) => m.role === "user");
   const userText = lastUser ? lastUser.content : "";
 
+  // Out-of-scope gate: deterministic fallback, no LLM call, before routing so
+  // it overrides both the KB fast path and the tool path.
+  const outOfScope = getOutOfScopeAnswer(userText, detectLanguage(userText));
+  if (outOfScope !== null) {
+    return sanitize_urls(outOfScope);
+  }
+
   let route;
   try {
     route = await classifyIntent(userText, apiKey, modelId);
@@ -355,6 +363,15 @@ async function runStream(sse, messages) {
 
     const lastUser = [...messages].reverse().find((m) => m.role === "user");
     const userText = lastUser ? lastUser.content : "";
+
+    // Out-of-scope gate: deterministic fallback short-circuits to done with no
+    // LLM call, before routing so it overrides both the KB fast path and the
+    // tool path.
+    const outOfScope = getOutOfScopeAnswer(userText, detectLanguage(userText));
+    if (outOfScope !== null) {
+      sse.done(sanitize_urls(outOfScope));
+      return;
+    }
 
     let route;
     try {

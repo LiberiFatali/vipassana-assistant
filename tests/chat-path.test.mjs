@@ -118,6 +118,26 @@ test("deterministic address question makes no LLM call", async () => {
   assert.equal(requests.length, 0, "no LLM call for a deterministic quick-answer");
 });
 
+test("out-of-scope question returns the static fallback with no LLM call", async () => {
+  requests.length = 0;
+  const res = await post([{ role: "user", content: "Cho tôi hỏi nhóm thiền ở Hà Nội?" }]);
+  const data = await res.json();
+
+  assert.ok(data.text.includes("info@ucenlist.org"), "fallback mentions the contact email");
+  assert.ok(data.text.includes("ban quản trị"), "fallback mentions the admin team");
+  assert.equal(requests.length, 0, "no LLM call for an out-of-scope question");
+});
+
+test("in-scope question still hits the LLM (out-of-scope gate does not interfere)", async () => {
+  answerCache.clear();
+  requests.length = 0;
+  const res = await post([{ role: "user", content: "What is the daily timetable during a 10-day course?" }]);
+  const data = await res.json();
+
+  assert.equal(data.text, "A curated answer.");
+  assert.equal(requests.length, 1, "in-scope question reaches the LLM");
+});
+
 test("repeated generative question is served from the answer cache", async () => {
   requests.length = 0;
   await post([{ role: "user", content: "Tell me about S.N. Goenka's biography." }]);
