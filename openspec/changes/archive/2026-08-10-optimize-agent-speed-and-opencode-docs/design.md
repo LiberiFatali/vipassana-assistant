@@ -36,7 +36,7 @@ Constraints that must be preserved:
 ### D1. Hybrid intent router (`api/router.js`)
 Classify the latest user message into `"kb"` (fast path), `"tools"` (slow path), or `"ambiguous"`.
 
-- **Strong TOOLS signals** (bilingual) → tools path immediately. EN: `schedule`, `upcoming`, `next course`, `register`, `apply`, `full`, `waitlist`, `deadline`, `spots`, `open course`, `when` + course words… VI: `lịch`, `lịch khai giảng`, `đăng ký`, `còn chỗ`, `hết chỗ`, `đã đầy`, `khai giảng`, `sắp tới`…
+- **Strong TOOLS signals** (bilingual) → tools path immediately. EN: `schedule`, `upcoming`, `next course`, `register`, `apply`, `full`, `waitlist`, `deadline`, `spots`, `open course`, `when` + course words… VI: `lịch`, `lịch các khóa thiền`, `đăng ký`, `còn chỗ`, `hết chỗ`, `đã đầy`, `sắp tới`…
 - **Strong KB signals** (e.g. `what is vipassana`, `giới luật`, `thời khóa biểu` for the *daily* timetable, `liên hệ`, `địa chỉ`…) → kb path.
 - **Ambiguous** (bare `course`/`khóa`, `satipatthana`, center names alone…) → LLM classifier.
 - Otherwise → kb path.
@@ -50,7 +50,7 @@ Also returns the detected language (`"vi" | "en"`) from the same pass, reused by
 ### D2. Knowledge sectioning (`api/sections.js`)
 - Parse `SKILL.md` once (module-cached) into sections using the stable header format `^## (\d+)(-VI)?\.`. Build a `[{ id, title, en|vi, text }]` list plus a keyword → section index.
 - `selectSections(text, lang)` returns the matched section(s) in the detected language, **plus always-on sections**: `11 KEY PRINCIPLES`, `12 QUICK REFERENCE`, `13 LANGUAGE GUIDE` (these encode chatbot behavior and are small).
-- Distinguish the two "timetable" senses: `thời khóa biểu` / "daily timetable" → KB section 7; `lịch khai giảng` / "course schedule" → tools signal.
+- Distinguish the two "timetable" senses: `thời khóa biểu` / "daily timetable" → KB section 7; `lịch các khóa thiền` / "course schedule" → tools signal.
 
 Rationale: the 44KB full-KB prompt is the dominant cost; sectioning cuts the fast-path prompt to roughly 2–6KB while guaranteeing the answer context is present. A vector store is overkill for 13 static sections.
 

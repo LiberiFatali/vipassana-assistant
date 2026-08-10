@@ -12,7 +12,7 @@ The system SHALL classify each user request as either knowledge-only (answerable
 - **THEN** the system classifies the request as knowledge-only and serves it from the knowledge base without live-data tools.
 
 #### Scenario: Live-schedule question routes to tool path
-- **WHEN** the user asks "Lịch khai giảng các khóa thiền sắp tới ở Hà Nội?"
+- **WHEN** the user asks "Lịch các khóa thiền sắp tới ở Hà Nội?"
 - **THEN** the system classifies the request as requiring live course data and invokes the course listing tool.
 
 #### Scenario: Ambiguous question falls back to the LLM classifier

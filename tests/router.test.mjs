@@ -45,7 +45,7 @@ test("kb: unknown/off-topic question defaults to fast path", () => {
 // ─── Live-data (tool) routing ────────────────────────────────────────────────
 
 test("tools: Vietnamese course-schedule question routes to tool path", () => {
-  assert.equal(classifyLocal("Lịch khai giảng các khóa thiền sắp tới ở Hà Nội?").kind, "tools");
+  assert.equal(classifyLocal("Lịch các khóa thiền sắp tới ở Hà Nội?").kind, "tools");
 });
 
 test("tools: bare 'lịch' course-schedule question routes to tool path", () => {

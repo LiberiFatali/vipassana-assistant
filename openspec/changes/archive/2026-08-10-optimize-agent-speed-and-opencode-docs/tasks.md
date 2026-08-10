@@ -6,7 +6,7 @@
 ## 2. Knowledge Sectioning
 
 - [x] 2.1 Create `api/sections.js`: parse `SKILL.md` once (module-cached) into its numbered EN/VI sections and build a keyword → section index.
-- [x] 2.2 Implement `selectSections(text, lang)` returning the matched sections plus always-on guide sections (11 KEY PRINCIPLES, 12 QUICK REFERENCE, 13 LANGUAGE GUIDE), distinguishing daily-timetable (`thời khóa biểu`) from course-schedule (`lịch khai giảng`).
+- [x] 2.2 Implement `selectSections(text, lang)` returning the matched sections plus always-on guide sections (11 KEY PRINCIPLES, 12 QUICK REFERENCE, 13 LANGUAGE GUIDE), distinguishing daily-timetable (`thời khóa biểu`) from course-schedule (`lịch các khóa thiền`).
 
 ## 3. Fast Path in api/chat.js
 

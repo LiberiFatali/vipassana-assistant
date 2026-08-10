@@ -8,7 +8,7 @@ The system SHALL act as a Chatbot Agent using Google ADK to orchestrate the exis
 - **THEN** agent retrieves the discipline rules from the knowledge base and responds compassionately in Vietnamese.
 
 #### Scenario: Querying courses with live data freshness
-- **WHEN** user asks "Lịch khai giảng các khóa thiền sắp tới ở Hà Nội?"
+- **WHEN** user asks "Lịch các khóa thiền sắp tới ở Hà Nội?"
 - **THEN** agent executes `list_courses` tool with `center="virocana"` and `language="vi"` and provides registration links.
 
 #### Scenario: Querying courses with fallback data freshness

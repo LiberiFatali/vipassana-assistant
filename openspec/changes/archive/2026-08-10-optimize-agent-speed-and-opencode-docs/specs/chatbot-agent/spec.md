@@ -15,7 +15,7 @@ The agent SHALL retrieve static information (Rules, Timetable, About S.N. Goenka
 The agent SHALL query upcoming course schedules at Dhamma Virocana (Hanoi) and Dhamma Vutthi (HCMC) via the built-in `list_courses` tool, which scrapes schedule.vridhamma.org (live → cached → fallback JSON) and returns every course record with a `data_freshness` field (`"live"` / `"cached"` / `"fallback"`). The tool SHALL run the two centers in parallel for `center="all"` and SHALL reuse in-flight scrapes for identical concurrent requests.
 
 #### Scenario: Querying courses with live data freshness
-- **WHEN** the user asks "Lịch khai giảng các khóa thiền sắp tới ở Hà Nội?"
+- **WHEN** the user asks "Lịch các khóa thiền sắp tới ở Hà Nội?"
 - **THEN** the agent executes `list_courses` with `center="virocana"` and `language="vi"`
 - **AND** lists the course dates, duration, and status
 - **AND** provides the registration links from the live scrape.
