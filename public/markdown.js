@@ -96,7 +96,11 @@ function buildTable(lines, start) {
   const head = header.map((c) => `<th>${inline(c)}</th>`).join("");
   const body = rows
     .filter((r) => r.length > 0)
-    .map((r) => `<tr>${r.map((c) => `<td>${inline(c)}</td>`).join("")}</tr>`)
+    .map((r) =>
+      `<tr>${r
+        .map((c, i) => `<td data-label="${esc(header[i] || "")}">${inline(c)}</td>`)
+        .join("")}</tr>`
+    )
     .join("");
   return { html: `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`, nextIndex: i };
 }

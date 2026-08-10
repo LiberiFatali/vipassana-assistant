@@ -68,14 +68,14 @@ test("blocks: table renders thead/tbody", () => {
   assert.match(html, /<table>/);
   assert.match(html, /<th>Start<\/th>/);
   assert.match(html, /<th>Status<\/th>/);
-  assert.match(html, /<td>Aug 26<\/td>/);
-  assert.match(html, /<td>Open<\/td>/);
+  assert.match(html, /<td data-label="Start">Aug 26<\/td>/);
+  assert.match(html, /<td data-label="Status">Open<\/td>/);
 });
 
 test("blocks: table cells with **bold** are rendered inline", () => {
   const md = "| Day |\n|---|\n| **Mon** |";
   const html = renderMarkdown(md);
-  assert.match(html, /<td><strong>Mon<\/strong><\/td>/);
+  assert.match(html, /<td data-label="Day"><strong>Mon<\/strong><\/td>/);
 });
 
 test("blocks: single newline inside paragraph becomes <br>", () => {

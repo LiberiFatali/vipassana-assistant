@@ -26,6 +26,7 @@
       display: flex;
       flex-direction: column;
       height: 100vh;
+      height: 100dvh;
     }
     header {
       display: flex;
@@ -55,6 +56,7 @@
       border-radius: 8px; padding: 7px 14px; cursor: pointer; font-size: 14px;
     }
     .btn:hover { background: var(--bg-2); }
+    .btn .btn-icon { display: none; }
     .layout {
       flex: 1;
       display: flex;
@@ -179,9 +181,59 @@
     aside.sidebar a:hover { text-decoration: underline; }
     aside.sidebar .official { margin-top: 6px; }
     @media (max-width: 720px) {
+      header { padding: 10px 14px; gap: 8px; }
+      header h1 { font-size: 16px; }
+      header .subtitle { display: none; }
+      .controls { gap: 8px; }
+      .lang-toggle button { padding: 6px 11px; font-size: 13px; }
+      .btn { padding: 6px 10px; }
+      .btn .btn-label { display: none; }
+      .btn .btn-icon { display: inline; }
       .layout { flex-direction: column; }
-      aside.sidebar { order: 2; flex: none; border-right: none; border-top: 1px solid var(--bg-3); }
-      aside.sidebar .centers { flex-direction: column; }
+      aside.sidebar { display: none; }
+      .bubble { max-width: 90%; font-size: 14px; }
+      .bubble.rendered table,
+      .bubble.rendered thead,
+      .bubble.rendered tbody,
+      .bubble.rendered tr,
+      .bubble.rendered td {
+        display: block;
+      }
+      .bubble.rendered thead { display: none; }
+      .bubble.rendered table { border-collapse: collapse; }
+      .bubble.rendered tr {
+        border: 1px solid var(--bg-3);
+        border-radius: 8px;
+        padding: 6px 10px;
+        margin: 6px 0;
+      }
+      .bubble.rendered tr:first-child { margin-top: 0; }
+      .bubble.rendered tr:last-child { margin-bottom: 0; }
+      .bubble.rendered td { border: none; padding: 3px 0; }
+      .bubble.rendered td::before {
+        content: attr(data-label);
+        display: block;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-dim);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        margin-bottom: 1px;
+      }
+      #composer {
+        padding: 10px 12px;
+        padding-bottom: max(10px, env(safe-area-inset-bottom));
+        gap: 8px;
+      }
+      #send {
+        min-width: 52px;
+        min-height: 44px;
+        padding: 12px 16px;
+      }
+      #input {
+        font-size: 16px;
+        padding: 12px 12px;
+      }
     }
   </style>
 </head>
@@ -196,7 +248,7 @@
         <button id="lang-vi" class="active" type="button">VI</button>
         <button id="lang-en" type="button">EN</button>
       </div>
-      <button id="clear" class="btn" type="button" data-i18n="clear">Xóa lịch sử</button>
+      <button id="clear" class="btn" type="button" data-i18n-aria="clear"><span class="btn-icon" aria-hidden="true">🗑</span><span class="btn-label" data-i18n="clear">Xóa lịch sử</span></button>
     </div>
   </header>
 
@@ -249,6 +301,7 @@
           thinking: "Đang suy nghĩ",
           error: "Xin lỗi, đã có lỗi xảy ra khi xử lý yêu cầu của bạn. Vui lòng thử lại sau.",
           welcome: "Chào bạn! Tôi là trợ lý về khóa thiền Vipassana của UCENLIST. Hãy hỏi tôi về Vipassana, thiền sư S.N. Goenka, nội quy giới luật, thời khóa biểu, hoặc lịch các khóa thiền sắp tới tại Hà Nội và TP. Hồ Chí Minh.",
+          welcomeMobile: "Chào bạn! Tôi là trợ lý về khóa thiền Vipassana của UCENLIST. Hãy hỏi tôi về Vipassana, thiền sư S.N. Goenka, nội quy giới luật, thời khóa biểu, hoặc lịch các khóa thiền sắp tới tại Hà Nội và TP. Hồ Chí Minh.\n\n**Dhamma Virocana** (Hà Nội)\nSố 15-17 ngõ Sala, đường Đồng Đò, thôn Minh Tân, xã Kim Anh, Hà Nội\n+84 966 894 936 · contact.virocana@vridhamma.org\n[virocana.vridhamma.org](https://virocana.vridhamma.org/vi) · [Lịch khóa thiền](https://schedule.vridhamma.org/vi/courses/virocana)\n\n**Dhamma Vutthi** (TP. Hồ Chí Minh)\n112, đường 628, ấp Trại Đèn, Phước Hiệp, Củ Chi, TP. Hồ Chí Minh\n+84 942 255 050 · contact.vutthi@vridhamma.org\n[vutthi.vridhamma.org](https://vutthi.vridhamma.org/vi) · [Lịch khóa thiền](https://schedule.vridhamma.org/vi/courses/vutthi)",
         },
         en: {
           subtitle: "Bilingual assistant about Vipassana meditation at UCENLIST (Vietnam)",
@@ -260,6 +313,7 @@
           thinking: "Thinking",
           error: "Sorry, something went wrong while processing your request. Please try again later.",
           welcome: "Hello! I am the Vipassana course assistant for UCENLIST. Ask me about Vipassana, Mr. S.N. Goenka, the Code of Discipline, the daily timetable, or upcoming course schedules in Hanoi and Ho Chi Minh City.",
+          welcomeMobile: "Hello! I am the Vipassana course assistant for UCENLIST. Ask me about Vipassana, Mr. S.N. Goenka, the Code of Discipline, the daily timetable, or upcoming course schedules in Hanoi and Ho Chi Minh City.\n\n**Dhamma Virocana** (Hanoi)\nSố 15-17 ngõ Sala, đường Đồng Đò, thôn Minh Tân, xã Kim Anh, Hà Nội\n+84 966 894 936 · contact.virocana@vridhamma.org\n[virocana.vridhamma.org](https://virocana.vridhamma.org/vi) · [Course schedule](https://schedule.vridhamma.org/vi/courses/virocana)\n\n**Dhamma Vutthi** (Ho Chi Minh City)\n112, đường 628, ấp Trại Đèn, Phước Hiệp, Củ Chi, TP. Hồ Chí Minh\n+84 942 255 050 · contact.vutthi@vridhamma.org\n[vutthi.vridhamma.org](https://vutthi.vridhamma.org/vi) · [Course schedule](https://schedule.vridhamma.org/vi/courses/vutthi)",
         },
       };
 
@@ -294,8 +348,12 @@
         }
       }
 
-      function applyLang() {
-        const t = I18N[lang];
+      function welcomeText() {
+        const isMobile = window.matchMedia("(max-width: 720px)").matches;
+        return isMobile ? I18N[lang].welcomeMobile : I18N[lang].welcome;
+      }
+
+      function applyLang() {        const t = I18N[lang];
         document.documentElement.lang = lang === "vi" ? "vi" : "en";
         langToggle.vi.classList.toggle("active", lang === "vi");
         langToggle.en.classList.toggle("active", lang === "en");
@@ -304,6 +362,9 @@
         });
         document.querySelectorAll("[data-i18n-ph]").forEach((el) => {
           el.setAttribute("placeholder", t[el.getAttribute("data-i18n-ph")] || el.getAttribute("placeholder"));
+        });
+        document.querySelectorAll("[data-i18n-aria]").forEach((el) => {
+          el.setAttribute("aria-label", t[el.getAttribute("data-i18n-aria")] || el.getAttribute("aria-label"));
         });
       }
 
@@ -488,7 +549,7 @@
       function init() {
         applyLang();
         if (history.length === 0) {
-          addMessage("agent", I18N[lang].welcome);
+          addMessage("agent", welcomeText());
         } else {
           history.forEach((m) => addMessage(m.role === "user" ? "user" : "agent", m.content));
         }
@@ -503,7 +564,7 @@
         history = [];
         saveHistory();
         chatEl.innerHTML = "";
-        addMessage("agent", I18N[lang].welcome);
+        addMessage("agent", welcomeText());
       }
 
       langToggle.vi.addEventListener("click", () => { lang = "vi"; localStorage.setItem(langKey, "vi"); applyLang(); });
