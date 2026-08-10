@@ -37,8 +37,11 @@ const TOOL_RESULT_ECHO_MAX = 8192;
 const LLM_CHAT_URL = "https://opencode.ai/zen/v1/chat/completions";
 // Single model id used for the classifier, the knowledge fast path, the tool
 // loop, and every retry. `AGENT_MODEL` wins if set; `FAST_MODEL` is the
-// fallback override; otherwise the lightweight default.
-const DEFAULT_MODEL = "mimo-v2.5-free";
+// fallback override; otherwise the lightweight default. `deepseek-v4-flash-free`
+// was chosen over `mimo-v2.5-free` because the latter now behaves as a slow
+// reasoning model (~30s to first content token, tripping the first-token
+// watchdog); deepseek reaches first content in ~5s.
+const DEFAULT_MODEL = "deepseek-v4-flash-free";
 
 /** Resolve the single model id from env (AGENT_MODEL > FAST_MODEL > default). */
 function resolveModel() {
@@ -750,7 +753,18 @@ async function* streamChatCompletion(apiMessages, apiKey, modelId, options = {})
       }
       const choice = chunk.choices && chunk.choices[0];
       if (choice && choice.delta) {
-        if (!firstDeltaSeen && (choice.delta.content || choice.delta.tool_calls)) {
+        // Any delta proves the stream is alive: content, tool-call fragments,
+        // or reasoning tokens. Reasoning models emit `reasoning`/
+        // `reasoning_content` before any content, so counting them as liveness
+        // prevents a slow-to-content (but working) model from being falsely
+        // aborted by the first-token watchdog.
+        if (
+          !firstDeltaSeen &&
+          (choice.delta.content ||
+            choice.delta.tool_calls ||
+            choice.delta.reasoning ||
+            choice.delta.reasoning_content)
+        ) {
           firstDeltaSeen = true;
           clearTimeout(timer);
           timer = armTimer();

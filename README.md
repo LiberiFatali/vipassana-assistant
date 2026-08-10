@@ -24,7 +24,7 @@ npm install
 
 # Set up credentials
 #   OPENCODE_API_KEY — required (OpenCode Zen API key, https://opencode.ai/auth)
-#   AGENT_MODEL      — optional model override (default mimo-v2.5-free)
+#   AGENT_MODEL      — optional model override (default deepseek-v4-flash-free)
 #   FAST_MODEL       — optional legacy override (AGENT_MODEL wins if both set)
 # For local dev, export them or create a .env file (e.g. via `vercel env`).
 ```
