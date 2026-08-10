@@ -1,16 +1,4 @@
-# Specification: Course Discovery
-
-## Purpose
-The Course Discovery capability enables live retrieval of upcoming Vipassana courses and center details from the UCENLIST organization websites.
-
-## Requirements
-
-### Requirement: Live Course Listing
-The system SHALL scrape and list courses from schedule.vridhamma.org with caching and a JSON fallback strategy.
-
-#### Scenario: Retrieve courses from the scraper
-- **WHEN** user requests a list of courses for a center
-- **THEN** system returns the parsed course details (start/end date, type, status, apply URL).
+## MODIFIED Requirements
 
 ### Requirement: Deterministic schedule answers
 The system SHALL answer schedule queries directly from scraped/cached course data without an LLM call. This SHALL apply to windowed schedule queries (a schedule/course keyword together with a center and/or a time window such as "cuối tháng này", "tháng này", "tháng sau", "tuần này/khác", or a specific month) AND to bare schedule/listing queries that mention a course noun (e.g. "khóa thiền sắp tới", "upcoming courses", "khi nào có khóa", "xem lịch") with no center and no time window, in which case the system SHALL answer with the upcoming courses (start date on or after today) across the relevant centers, capped to a bounded list ordered by start date. The answer SHALL be produced in the user's detected language, include each course's type, start/end dates, registration status, and apply link, and its output SHALL pass through `sanitize_urls()`. Queries that do not match — including registration-intent phrasing with no course noun (e.g. "Làm sao đăng ký?", "how to register") — SHALL fall through to the normal tool loop. This path SHALL NOT attach tools.
@@ -38,18 +26,3 @@ The system SHALL answer schedule queries directly from scraped/cached course dat
 #### Scenario: Knowledge questions never trigger the schedule answer
 - **WHEN** the user asks "Vipassana là gì?"
 - **THEN** the query is not treated as a deterministic schedule request and takes the existing knowledge routing
-
-### Requirement: Parsed Vietnamese course dates
-The course scraper SHALL parse the VRI site's Vietnamese date format (e.g. `20 Th8 - 23 Th8` for 20–23 August) into ISO `YYYY-MM-DD` start/end dates, so listings sort chronologically and the LLM/tool echo never carries raw unparsed date strings. Ranges that cross a year boundary (e.g. `29 Th12 - 2 Th1`) SHALL have the end year advanced.
-
-#### Scenario: Vietnamese month token with attached digit
-- **WHEN** the scraper parses a date cell "20 Th8 - 23 Th8"
-- **THEN** the course has `start_date` "2026-08-20" and `end_date` "2026-08-23"
-
-#### Scenario: Year-crossing range
-- **WHEN** the scraper parses a date cell "29 Th12 - 2 Th1"
-- **THEN** the course has `start_date` "2026-12-29" and `end_date` "2027-01-02"
-
-#### Scenario: Existing English date formats still parse
-- **WHEN** the scraper parses an English date cell "01 Aug - 12 Aug 2026"
-- **THEN** the course has `start_date` "2026-08-01" and `end_date` "2026-08-12"

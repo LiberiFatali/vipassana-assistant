@@ -15,7 +15,7 @@ import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 
 import { POST } from "../api/chat.js";
-import { answerCache } from "../api/answer-cache.js";
+import { answerCache } from "../lib/answer-cache.js";
 
 const ORIGINAL_FETCH = globalThis.fetch;
 const requests = [];
@@ -69,7 +69,7 @@ test("fast path: knowledge-only question sends no tools and a trimmed prompt", a
   assert.equal(requests.length, 1, "single LLM call on the fast path");
 
   const body = requests[0].body;
-  assert.equal(body.model, "test-fast-model", "FAST_MODEL is used on the fast path");
+  assert.equal(body.model, "test-model", "single model is used on the fast path");
   assert.equal(body.tools, undefined, "no tools attached on the fast path");
   assert.equal(body.tool_choice, undefined, "no tool_choice on the fast path");
 
@@ -81,7 +81,7 @@ test("fast path: knowledge-only question sends no tools and a trimmed prompt", a
 test("tool path: live-schedule question attaches tools and the full KB", async () => {
   requests.length = 0;
   const res = await post([
-    { role: "user", content: "Lịch khai giảng các khóa thiền sắp tới ở Hà Nội?" },
+    { role: "user", content: "Khóa thiền 10 ngày hết chỗ chưa?" },
   ]);
   const data = await res.json();
 

@@ -81,7 +81,26 @@ const server = createServer(async (req, res) => {
       res.writeHead(response.status, {
         "Content-Type": response.headers.get("content-type") || "application/json",
       });
-      res.end(await response.text());
+      // Pipe the web Response body through so SSE flows incrementally in dev.
+      if (response.body) {
+        const reader = response.body.getReader();
+        try {
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            res.write(Buffer.from(value));
+          }
+        } finally {
+          try {
+            reader.releaseLock();
+          } catch {
+            /* already released */
+          }
+        }
+        res.end();
+      } else {
+        res.end(await response.text());
+      }
     } catch (err) {
       console.error("api/chat failed:", err);
       res.writeHead(500, { "Content-Type": "application/json" });

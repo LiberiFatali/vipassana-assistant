@@ -25,8 +25,23 @@ The system SHALL answer high-confidence factual queries about UCENLIST meditatio
 - **WHEN** a knowledge-path question does not confidently match a deterministic intent
 - **THEN** the system answers via the normal single-call LLM fast path
 
+### Requirement: Deterministic FAQ answers
+The system SHALL answer high-frequency knowledge questions about course cost (free / `miễn phí` / donation / `cúng dường`), diet (`ăn chay` / vegetarian), and eligibility (`ai có thể tham gia` / who can attend / `điều kiện`) with curated bilingual answers directly from the knowledge base, without calling an LLM, when the request routes to the knowledge path.
+
+#### Scenario: Free-of-charge question in Vietnamese
+- **WHEN** the user asks "Khóa thiền có miễn phí không?" and the request routes to the knowledge path
+- **THEN** the system returns a curated answer noting courses are run entirely on donations, without calling an LLM
+
+#### Scenario: Diet question in English
+- **WHEN** the user asks "Is the food vegetarian?" and the request routes to the knowledge path
+- **THEN** the system returns a curated answer about the vegetarian meals served, without calling an LLM
+
+#### Scenario: Eligibility question in Vietnamese
+- **WHEN** the user asks "Ai có thể tham gia khóa thiền?" and the request routes to the knowledge path
+- **THEN** the system returns a curated answer about eligibility, without calling an LLM
+
 ### Requirement: Curated bilingual definition for Vipassana
-The system SHALL answer "Vipassana là gì?" / "What is Vipassana?" / "meaning of Vipassana" style questions with a concise curated definition in the user's language, without calling an LLM, routed only on the knowledge path.
+The system SHALL answer "Vipassana là gì?" / "What is Vipassana?" / "meaning of Vipassana" style questions — including paraphrase variants such as "kể cho tôi về Vipassana", "giới thiệu về Vipassana", "tell me about Vipassana", and "vipassana meditation is" — with a concise curated definition in the user's language, without calling an LLM, routed only on the knowledge path.
 
 #### Scenario: Vietnamese definition
 - **WHEN** the user asks "Vipassana là gì?" and the request routes to the knowledge path
@@ -35,6 +50,10 @@ The system SHALL answer "Vipassana là gì?" / "What is Vipassana?" / "meaning o
 #### Scenario: English definition
 - **WHEN** the user asks "What is Vipassana?"
 - **THEN** the system returns a concise English definition of Vipassana without calling an LLM
+
+#### Scenario: Paraphrased definition question
+- **WHEN** the user asks "Kể cho tôi về Vipassana" or "tell me about Vipassana" and the request routes to the knowledge path
+- **THEN** the system returns the curated definition without calling an LLM
 
 ### Requirement: In-memory answer caching for repeated questions
 The system SHALL cache generated LLM fast-path answers in memory keyed by `lang|normalized question`, so that a repeated knowledge question on a warm instance returns the cached answer instantly instead of making another LLM call. Cached entries SHALL expire after a bounded TTL and the cache SHALL be size-capped to prevent unbounded growth.

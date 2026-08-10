@@ -1,14 +1,14 @@
 /**
  * tests/quick-answers.test.mjs — deterministic structured answers in
- * api/quick-answers.js (no LLM calls).
+ * lib/quick-answers.js (no LLM calls).
  *
  * Run: node --test tests/quick-answers.test.mjs
  */
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { getQuickAnswer } from "../api/quick-answers.js";
-import { sanitize_urls } from "../api/sanitize.js";
+import { getQuickAnswer } from "../lib/quick-answers.js";
+import { sanitize_urls } from "../lib/sanitize.js";
 
 test("virocana address in Vietnamese", () => {
   const out = getQuickAnswer("Địa chỉ trung tâm Hà Nội?", "vi");
@@ -59,10 +59,38 @@ test("meaning of vipassana triggers the definition", () => {
   assert.ok(getQuickAnswer("meaning of vipassana", "en").includes("ancient Indian meditation"));
 });
 
+test("paraphrased definition questions trigger the curated definition", () => {
+  assert.ok(getQuickAnswer("Kể cho tôi về Vipassana", "vi").includes("Thiền Minh Sát"));
+  assert.ok(getQuickAnswer("Giới thiệu về Vipassana", "vi").includes("Thiền Minh Sát"));
+  assert.ok(getQuickAnswer("Tell me about Vipassana", "en").includes("to see things as they really are"));
+  assert.ok(getQuickAnswer("About Vipassana meditation", "en").includes("ancient Indian meditation"));
+});
+
+test("cost FAQ in Vietnamese and English", () => {
+  assert.ok(getQuickAnswer("Khóa thiền có miễn phí không?", "vi").includes("miễn phí"));
+  assert.ok(getQuickAnswer("How much does the course cost?", "en").includes("no charge"));
+  assert.ok(getQuickAnswer("cúng dường là gì?", "vi").includes("cúng dường"));
+  assert.ok(getQuickAnswer("Is the course free?", "en").includes("donation"));
+});
+
+test("diet FAQ in Vietnamese and English", () => {
+  assert.ok(getQuickAnswer("Đồ ăn trong khóa có chay không?", "vi").includes("ăn chay"));
+  assert.ok(getQuickAnswer("Is the food vegetarian?", "en").includes("vegetarian"));
+  assert.ok(getQuickAnswer("Tôi có thể mang đồ ăn riêng không?", "vi").includes("mang thức ăn"));
+});
+
+test("eligibility FAQ in Vietnamese and English", () => {
+  assert.ok(getQuickAnswer("Ai có thể tham gia khóa thiền?", "vi").includes("sức khỏe"));
+  assert.ok(getQuickAnswer("Who can attend the course?", "en").includes("reasonable physical and mental health"));
+  assert.ok(getQuickAnswer("Điều kiện tham gia là gì?", "vi").includes("sức khỏe"));
+});
+
 test("non-match returns null (falls through to LLM)", () => {
   assert.equal(getQuickAnswer("Thời khóa biểu hằng ngày như thế nào?", "vi"), null);
   assert.equal(getQuickAnswer("What are the benefits of meditation?", "en"), null);
   assert.equal(getQuickAnswer("khóa thiền sắp tới ở Hà Nội?", "vi"), null);
+  assert.equal(getQuickAnswer("Làm sao đăng ký khóa thiền?", "vi"), null);
+  assert.equal(getQuickAnswer("How do I register?", "en"), null);
 });
 
 test("quick-answer URLs survive sanitize_urls (trusted domains only)", () => {

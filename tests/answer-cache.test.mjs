@@ -1,13 +1,13 @@
 /**
  * tests/answer-cache.test.mjs — in-memory TTL/size-capped answer cache in
- * api/answer-cache.js.
+ * lib/answer-cache.js.
  *
  * Run: node --test tests/answer-cache.test.mjs
  */
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { AnswerCache } from "../api/answer-cache.js";
+import { AnswerCache } from "../lib/answer-cache.js";
 
 test("set then get returns the answer", () => {
   const c = new AnswerCache();

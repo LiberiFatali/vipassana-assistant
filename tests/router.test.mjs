@@ -1,6 +1,5 @@
 /**
  * tests/router.test.mjs — unit tests for the bilingual intent router.
- *
  * Covers local keyword classification (knowledge-only / live-data / ambiguous),
  * language detection, and text normalization. The LLM classifier fallback is
  * exercised indirectly in tests/chat-path.test.mjs.
@@ -10,7 +9,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { classifyLocal, detectLanguage, normalize } from "../api/router.js";
+import { classifyLocal, detectLanguage, normalize } from "../lib/router.js";
 
 // ─── Knowledge-only routing ─────────────────────────────────────────────────
 

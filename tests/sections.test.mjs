@@ -7,9 +7,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { loadKnowledgeBase } from "../api/knowledge.js";
-import { KNOWLEDGE_SYSTEM_PROMPT } from "../api/system-prompt.js";
-import { buildFastPathSystemPrompt, parseSections, selectSections } from "../api/sections.js";
+import { loadKnowledgeBase } from "../lib/knowledge.js";
+import { KNOWLEDGE_SYSTEM_PROMPT } from "../lib/system-prompt.js";
+import { buildFastPathSystemPrompt, parseSections, selectSections } from "../lib/sections.js";
 
 const FULL_KB = loadKnowledgeBase();
 

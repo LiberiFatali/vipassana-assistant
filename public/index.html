@@ -327,30 +327,22 @@
         chatEl.scrollTop = chatEl.scrollHeight;
       }
 
-      function addThinking() {
-        const wrap = document.createElement("div");
-        wrap.className = "message agent";
-        const el = document.createElement("div");
-        el.className = "thinking";
-        el.dataset.thinking = "1";
-        el.textContent = I18N[lang].thinking + " ";
-        const dots = document.createElement("span");
-        dots.className = "dots";
-        el.appendChild(dots);
-        wrap.appendChild(el);
-        chatEl.appendChild(wrap);
-        chatEl.scrollTop = chatEl.scrollHeight;
-        return wrap;
-      }
-
       function removeThinking() {
         const el = chatEl.querySelector('[data-thinking="1"]');
-        if (el) el.parentElement.remove();
+        if (el) el.remove();
       }
+
+      let activeController = null;
 
       async function sendMessage() {
         const content = inputEl.value.trim();
-        if (!content || sendBtn.disabled) return;
+        if (!content) return;
+
+        // Sending a new message cancels any in-flight stream.
+        if (activeController) {
+          activeController.abort();
+          activeController = null;
+        }
 
         inputEl.value = "";
         autoGrow();
@@ -359,33 +351,132 @@
         history.push({ role: "user", content });
         saveHistory();
 
-        sendBtn.disabled = true;
-        const thinkingEl = addThinking();
+        // Create the agent bubble now; it fills in incrementally as deltas
+        // arrive, and settles to the authoritative `done` text.
+        const agentWrap = document.createElement("div");
+        agentWrap.className = "message agent";
+        const bubble = document.createElement("div");
+        bubble.className = "bubble rendered";
+        agentWrap.appendChild(bubble);
+        chatEl.appendChild(agentWrap);
 
-        try {
-          const res = await fetch("/api/chat", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ messages: history.slice(-MAX_MESSAGES) }),
+        const thinkingEl = document.createElement("div");
+        thinkingEl.className = "thinking";
+        thinkingEl.dataset.thinking = "1";
+        thinkingEl.textContent = I18N[lang].thinking + " ";
+        const dots = document.createElement("span");
+        dots.className = "dots";
+        thinkingEl.appendChild(dots);
+        agentWrap.appendChild(thinkingEl);
+
+        const controller = new AbortController();
+        activeController = controller;
+
+        let fullText = "";
+        let statusEl = null;
+        let settled = false;
+        let rafPending = false;
+
+        function scheduleRender() {
+          if (rafPending) return;
+          rafPending = true;
+          requestAnimationFrame(() => {
+            rafPending = false;
+            bubble.innerHTML = renderMarkdown(fullText);
+            chatEl.scrollTop = chatEl.scrollHeight;
           });
-          const data = await res.json();
-          const text = (data && typeof data.text === "string" && data.text)
-            ? data.text
-            : (data && data.error) ? data.error : I18N[lang].error;
+        }
 
+        function showStatus(message) {
           removeThinking();
-          addMessage("agent", text);
-          history.push({ role: "assistant", content: text });
-          saveHistory();
-        } catch (err) {
+          if (!statusEl) {
+            statusEl = document.createElement("div");
+            statusEl.className = "thinking";
+            agentWrap.insertBefore(statusEl, bubble);
+          }
+          statusEl.textContent = message;
+        }
+
+        function finish(text) {
+          if (typeof text === "string") fullText = text;
+          if (statusEl) { statusEl.remove(); statusEl = null; }
           removeThinking();
-          const text = I18N[lang].error;
-          addMessage("agent", text);
-          history.push({ role: "assistant", content: text });
-          saveHistory();
-        } finally {
+          bubble.innerHTML = renderMarkdown(fullText);
+          chatEl.scrollTop = chatEl.scrollHeight;
+        }
+
+        function settle() {
+          if (settled) return;
+          settled = true;
+          if (activeController === controller) activeController = null;
           sendBtn.disabled = false;
           inputEl.focus();
+          chatEl.scrollTop = chatEl.scrollHeight;
+          if (fullText) {
+            history.push({ role: "assistant", content: fullText });
+            saveHistory();
+          }
+        }
+
+        try {
+          const res = await fetch("/api/chat?stream=1", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+            body: JSON.stringify({ messages: history.slice(-MAX_MESSAGES) }),
+            signal: controller.signal,
+          });
+          if (!res.ok || !res.body) throw new Error("streaming request failed");
+
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          let buf = "";
+
+          function handleFrame(event, data) {
+            if (event === "status") {
+              showStatus(data.message || "");
+            } else if (event === "delta") {
+              if (statusEl) { statusEl.remove(); statusEl = null; }
+              removeThinking();
+              fullText += data.text || "";
+              scheduleRender();
+            } else if (event === "done") {
+              finish(data && typeof data.text === "string" ? data.text : null);
+            } else if (event === "error") {
+              finish(data && typeof data.text === "string" ? data.text : I18N[lang].error);
+            }
+          }
+
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buf += decoder.decode(value, { stream: true });
+            let idx;
+            while ((idx = buf.indexOf("\n\n")) !== -1) {
+              const frame = buf.slice(0, idx);
+              buf = buf.slice(idx + 2);
+              let event = "message";
+              let dataStr = "";
+              for (const line of frame.split("\n")) {
+                if (line.startsWith("event:")) event = line.slice(6).trim();
+                else if (line.startsWith("data:")) dataStr += line.slice(5).trim();
+              }
+              if (!dataStr || dataStr === "[DONE]") continue;
+              let data;
+              try { data = JSON.parse(dataStr); } catch { continue; }
+              handleFrame(event, data);
+            }
+          }
+          removeThinking();
+        } catch (err) {
+          if (err && err.name === "AbortError") {
+            // Cancelled by a new message / Clear chat. Keep whatever partial
+            // (sanitized) text was rendered so far.
+            finish(fullText || null);
+          } else {
+            finish(I18N[lang].error);
+          }
+        } finally {
+          settle();
         }
       }
 
@@ -405,6 +496,10 @@
       }
 
       function clearChat() {
+        if (activeController) {
+          activeController.abort();
+          activeController = null;
+        }
         history = [];
         saveHistory();
         chatEl.innerHTML = "";

@@ -24,8 +24,8 @@ npm install
 
 # Set up credentials
 #   OPENCODE_API_KEY — required (OpenCode Zen API key, https://opencode.ai/auth)
-#   AGENT_MODEL      — optional (default deepseek-v4-flash-free)
-#   FAST_MODEL       — optional, fast-path only (default mimo-v2.5-free)
+#   AGENT_MODEL      — optional model override (default mimo-v2.5-free)
+#   FAST_MODEL       — optional legacy override (AGENT_MODEL wins if both set)
 # For local dev, export them or create a .env file (e.g. via `vercel env`).
 ```
 
@@ -43,6 +43,31 @@ Prefer the Vercel CLI instead? Install it first:
 npm i -g vercel
 vercel dev   # serves the same app on http://localhost:3000
 ```
+
+## API
+
+`POST /api/chat` accepts a JSON body `{ "messages": [{ "role": "user", "content": "..." }] }`.
+
+### Non-streaming (default)
+
+Returns JSON `{ "text": "..." }` with `Content-Type: application/json`.
+
+### Streaming (SSE)
+
+Send an `Accept: text/event-stream` header or append `?stream=1` to the URL. The
+response is `Content-Type: text/event-stream` and each SSE frame has an `event`
+type and a JSON `data` payload:
+
+| event    | data                                   | meaning                                             |
+| -------- | -------------------------------------- | --------------------------------------------------- |
+| `status` | `{ "text": "..." }`                    | tool-path progress message (before/after tool steps)|
+| `delta`  | `{ "text": "..." }`                    | incremental, sanitized answer fragment              |
+| `done`   | `{ "text": "..." }`                    | complete sanitized answer (last event)              |
+| `error`  | `{ "text": "..." }`                    | static bilingual error (no `done` follows)          |
+
+Frames end with `data: [DONE]`. On the KB fast path a deterministic quick-answer
+or a cache hit short-circuits straight to `done` with no `delta`. Every fragment
+(including `delta`) passes through `sanitize_urls()`.
 
 ## Running tests
 
@@ -70,16 +95,18 @@ Or import the repository into Vercel from GitHub — every push to the productio
 public/index.html        # single static chat UI (bilingual, dark theme, no build step)
 public/markdown.js       # zero-dependency markdown renderer (escape-first, trusted-domain-gated links)
 server.js                # local dev server (npm run dev) — static public/ + routes /api/chat
-api/chat.js              # POST /api/chat — intent router → fast path or tool loop → sanitized { text }
-api/router.js            # bilingual (EN/VI) intent router: knowledge-only vs live-data (+ tiny LLM fallback)
-api/quick-answers.js     # deterministic no-LLM answers (center info, Vipassana definition) for the fast path
-api/answer-cache.js      # in-memory TTL cache for repeated fast-path answers
-api/sections.js          # SKILL.md sectioning + fast-path prompt builder (trimmed knowledge context)
-api/knowledge.js         # loads SKILL.md via import.meta.url
-api/system-prompt.js     # KNOWLEDGE_SYSTEM_PROMPT (verbatim, {knowledge_base} placeholder)
-api/sanitize.js          # TRUSTED_DOMAINS + sanitize_urls() — Safe Domain Gating backstop
-api/tools/               # list_courses, get_course_details, get_center_info (tool registry + zod parse)
-api/scraper/             # vri-schedule.js (fetch + cheerio), cache.js (TTL + fallback chain)
+api/chat.js              # POST /api/chat — intent router → fast path or tool loop → sanitized output
+lib/stream.js            # SSE writer + rolling URL sanitizer for streaming responses
+lib/router.js            # bilingual (EN/VI) intent router: knowledge-only vs live-data (+ tiny LLM fallback)
+lib/quick-answers.js     # deterministic no-LLM answers (center info, Vipassana definition) for the fast path
+lib/answer-cache.js      # in-memory TTL cache for repeated fast-path answers
+lib/sections.js          # SKILL.md sectioning + fast-path prompt builder (trimmed knowledge context)
+lib/knowledge.js         # loads SKILL.md via import.meta.url
+lib/system-prompt.js     # KNOWLEDGE_SYSTEM_PROMPT (verbatim, {knowledge_base} placeholder)
+lib/sanitize.js          # TRUSTED_DOMAINS + sanitize_urls() — Safe Domain Gating backstop
+lib/normalize.js         # diacritic-stripping normalizer used by the router + cache keys
+lib/tools/               # list_courses, get_course_details, get_center_info (tool registry + zod parse)
+lib/scraper/             # vri-schedule.js (fetch + cheerio), cache.js (TTL + fallback chain)
 lib/centers.js           # static center info
 lib/fallback-schedule.json  # static fallback schedule data
 tests/sanitize.test.mjs  # eval suite (node --test)
@@ -89,6 +116,7 @@ tests/sections.test.mjs  # knowledge sectioning + fast-path prompt suite (node -
 tests/chat-path.test.mjs # request-path integration suite (stubbed fetch)
 tests/quick-answers.test.mjs # deterministic-answer suite (node --test)
 tests/answer-cache.test.mjs  # answer-cache suite (node --test)
+tests/stream.test.mjs    # streaming negotiation + SSE event suite (stubbed fetch)
 vercel.json              # function maxDuration + region (sin1)
 ```
 

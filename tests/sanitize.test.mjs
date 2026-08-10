@@ -19,9 +19,9 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { TRUSTED_DOMAINS, sanitize_urls } from "../api/sanitize.js";
-import { KNOWLEDGE_SYSTEM_PROMPT } from "../api/system-prompt.js";
-import { loadKnowledgeBase } from "../api/knowledge.js";
+import { TRUSTED_DOMAINS, sanitize_urls } from "../lib/sanitize.js";
+import { KNOWLEDGE_SYSTEM_PROMPT } from "../lib/system-prompt.js";
+import { loadKnowledgeBase } from "../lib/knowledge.js";
 import { CENTERS } from "../lib/centers.js";
 
 const URL_RE = /https?:\/\/[^\s\)\]"']+/g;
@@ -173,8 +173,8 @@ test("smoke: fallback schedule JSON has courses with center_id and data_freshnes
 test("smoke: sanitize.js and system-prompt.js import without side effects", async () => {
   // Importing these modules must not construct an agent or open a connection
   // (single agent construction path — only api/chat.js builds the agent).
-  const sanitize = await import("../api/sanitize.js");
-  const prompt = await import("../api/system-prompt.js");
+  const sanitize = await import("../lib/sanitize.js");
+  const prompt = await import("../lib/system-prompt.js");
   assert.equal(typeof sanitize.sanitize_urls, "function");
   assert.equal(typeof prompt.KNOWLEDGE_SYSTEM_PROMPT, "string");
 });
