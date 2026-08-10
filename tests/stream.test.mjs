@@ -294,7 +294,7 @@ test("first-token watchdog aborts a stalled stream and emits error without retry
   requests.length = 0;
   responses.length = 0;
   responses.push(PROVIDER_STALLED);
-  process.env.FIRST_TOKEN_TIMEOUT_MS = "10";
+  process.env.FIRST_TOKEN_TIMEOUT_MS = "50";
 
   const res = await streamPost([{ role: "user", content: "What is the daily timetable?" }]);
   const events = await readEvents(res);
@@ -315,7 +315,7 @@ test("healthy stream is unaffected by the first-token watchdog", async () => {
     chunk({ content: "ma.org " }),
     chunk({ content: "now" }, "stop"),
   ]);
-  process.env.FIRST_TOKEN_TIMEOUT_MS = "10";
+  process.env.FIRST_TOKEN_TIMEOUT_MS = "50";
 
   const res = await streamPost([{ role: "user", content: "What is the daily timetable?" }]);
   const events = await readEvents(res);

@@ -30,8 +30,8 @@ const MAX_MESSAGES = 20;
 const MAX_REQUEST_MESSAGES = 100;
 const MAX_MESSAGE_LENGTH = 20000;
 const MAX_TOOL_STEPS = 5;
-const LLM_TIMEOUT_MS = 50000;
-const FIRST_TOKEN_TIMEOUT_MS = 10000;
+const LLM_TIMEOUT_MS = 100000;
+const FIRST_TOKEN_TIMEOUT_MS = 50000;
 const TOOL_RESULT_ECHO_MAX = 8192;
 
 const LLM_CHAT_URL = "https://opencode.ai/zen/v1/chat/completions";

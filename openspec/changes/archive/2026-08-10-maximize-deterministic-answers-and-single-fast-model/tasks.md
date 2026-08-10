@@ -20,7 +20,7 @@
 
 ## 4. First-token watchdog (`api/chat.js`)
 
-- [x] 4.1 Add a `FIRST_TOKEN_TIMEOUT_MS` (≈10s) to `streamChatCompletion`: a single abort timer armed at the first-token bound and re-armed at `LLM_TIMEOUT_MS` once the first content/tool-call delta arrives, so a stalled model fails fast while a mid-stream hang still cannot run forever
+- [x] 4.1 Add a `FIRST_TOKEN_TIMEOUT_MS` (≈50s) to `streamChatCompletion`: a single abort timer armed at the first-token bound and re-armed at `LLM_TIMEOUT_MS` once the first content/tool-call delta arrives, so a stalled model fails fast while a mid-stream hang still cannot run forever
 - [x] 4.2 Verify fast-path handling treats a first-token abort as `isTimeoutError` so the existing retry-before-first-delta logic fires, else emits the static `error`
 - [x] 4.3 Add tests in `tests/stream.test.mjs`: a stalled stream with no first token emits `error` (no `done`, no retry); a healthy streamed call is unaffected
 
