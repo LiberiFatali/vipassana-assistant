@@ -9,7 +9,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { classifyLocal, detectLanguage, normalize } from "../lib/router.js";
+import { classifyIntent, classifyLocal, detectLanguage, normalize } from "../lib/router.js";
 
 // ─── Knowledge-only routing ─────────────────────────────────────────────────
 
@@ -67,6 +67,58 @@ test("ambiguous: bare 'course'/'khóa thiền' is not decided locally", () => {
   assert.equal(classifyLocal("khóa thiền").kind, "ambiguous");
   assert.equal(classifyLocal("satipatthana").kind, "ambiguous");
   assert.equal(classifyLocal("Which course is suitable for me?").kind, "ambiguous");
+});
+
+// ─── Deterministic retrieval resolution (classifyIntent) ────────────────────
+
+const ORIGINAL_FETCH = globalThis.fetch;
+
+test("classifyIntent: clear live-data paraphrase resolves to tools with no LLM call", async () => {
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    throw new Error("LLM should not be consulted for a retrieval-resolved request");
+  };
+  try {
+    const r = await classifyIntent("Những khóa nào sắp diễn ra trong thời gian tới?", "k", "m");
+    assert.equal(r.kind, "tools");
+    assert.equal(calls, 0, "retrieval resolved the request deterministically");
+  } finally {
+    globalThis.fetch = ORIGINAL_FETCH;
+  }
+});
+
+test("classifyIntent: below-margin bare course noun still consults the LLM classifier", async () => {
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return { choices: [{ message: { content: "TOOLS" } }] };
+      },
+    };
+  };
+  try {
+    const r = await classifyIntent("khóa thiền", "k", "m");
+    assert.equal(r.kind, "tools", "LLM classifier resolves to tools");
+    assert.equal(calls, 1, "LLM classifier consulted exactly once");
+  } finally {
+    globalThis.fetch = ORIGINAL_FETCH;
+  }
+});
+
+test("classifyIntent: classifier failure still defaults to the tool path", async () => {
+  globalThis.fetch = async () => {
+    throw new Error("simulated network failure");
+  };
+  try {
+    const r = await classifyIntent("khóa thiền", "k", "m");
+    assert.equal(r.kind, "tools", "conservative tools default on classifier failure");
+  } finally {
+    globalThis.fetch = ORIGINAL_FETCH;
+  }
 });
 
 // ─── Language detection ──────────────────────────────────────────────────────

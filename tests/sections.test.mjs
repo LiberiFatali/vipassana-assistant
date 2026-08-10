@@ -55,6 +55,17 @@ test("select: unknown text falls back to general default sections", () => {
   assert.ok(out.includes("## 1. ABOUT UCENLIST") || out.includes("## 2. WHAT IS VIPASSANA"));
 });
 
+test("select: VI paraphrase without keyword matches selects the discipline section", () => {
+  const out = selectSections("Những điều được phép và không được phép trong khóa thiền?", "vi");
+  assert.ok(out.includes("## 6-VI."), "contains VI section 6");
+  assert.ok(out.includes("GIỚI LUẬT"), "contains the VI discipline content");
+});
+
+test("select: EN daily-routine paraphrase selects FAQ instead of the default", () => {
+  const out = selectSections("How does a normal day look inside the course?", "en");
+  assert.ok(out.includes("## 8. QUESTIONS AND ANSWERS (FAQ)"), "contains section 8");
+});
+
 test("select: output is substantially smaller than the full knowledge base", () => {
   const out = selectSections("What is Vipassana?", "en");
   assert.ok(out.length < FULL_KB.length / 2, `selected ${out.length}B vs full ${FULL_KB.length}B`);
