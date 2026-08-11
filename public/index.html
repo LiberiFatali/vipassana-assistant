@@ -519,7 +519,18 @@
           }
         }
 
+        let watchdogTimer = null;
+        function resetWatchdog() {
+          if (watchdogTimer) clearTimeout(watchdogTimer);
+          watchdogTimer = setTimeout(() => {
+            if (!fullText) {
+              controller.abort();
+            }
+          }, 15000);
+        }
+
         try {
+          resetWatchdog();
           const res = await fetch("/api/chat?stream=1", {
             method: "POST",
             headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
@@ -533,6 +544,7 @@
           let buf = "";
 
           function handleFrame(event, data) {
+            resetWatchdog();
             if (event === "status") {
               showStatus(data.message || "");
             } else if (event === "delta") {
@@ -567,7 +579,11 @@
               handleFrame(event, data);
             }
           }
-          removeThinking();
+          if (!fullText) {
+            finish(I18N[lang].error);
+          } else {
+            removeThinking();
+          }
         } catch (err) {
           if (err && err.name === "AbortError") {
             // Cancelled by a new message / Clear chat. Keep whatever partial
@@ -577,6 +593,7 @@
             finish(I18N[lang].error);
           }
         } finally {
+          if (watchdogTimer) clearTimeout(watchdogTimer);
           settle();
         }
       }

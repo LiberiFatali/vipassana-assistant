@@ -20,7 +20,7 @@ import { detectLanguage, normalize } from "../lib/router.js";
 import { buildFastPathSystemPrompt } from "../lib/sections.js";
 import { getQuickAnswer } from "../lib/quick-answers.js";
 import { getOutOfScopeAnswer } from "../lib/out-of-scope.js";
-import { getScheduleAnswer } from "../lib/schedule-answers.js";
+import { buildLiveScheduleContext, getScheduleAnswer } from "../lib/schedule-answers.js";
 import { answerCache } from "../lib/answer-cache.js";
 import { getCenterInfo, getCenterInfoInputSchema } from "../lib/tools/get-center-info.js";
 import { getCourseDetails, getCourseDetailsInputSchema } from "../lib/tools/get-course-details.js";
@@ -128,6 +128,15 @@ function resolveModel() {
 const ERROR_RESPONSE_TEXT =
   "Xin lỗi, đã có lỗi xảy ra khi xử lý yêu cầu của bạn. Vui lòng thử lại sau. / " +
   "Sorry, something went wrong while processing your request. Please try again later.";
+
+/**
+ * Friendly apology emitted when the LLM takes too long to respond.
+ * Distinct from the generic error so users understand it's a temporary
+ * slowness, not a permanent failure.
+ */
+const TIMEOUT_RESPONSE_TEXT =
+  "Xin lỗi, trợ lý đang bận và mất quá nhiều thời gian để phản hồi. Bạn vui lòng thử lại sau nhé! 🙏 / " +
+  "Sorry, the assistant is taking too long to respond right now. Please try again in a moment! 🙏";
 
 /** True when a streamed LLM call was aborted by the first-token/overall timer. */
 function isTimeoutError(err) {
@@ -374,62 +383,36 @@ async function generateAgentResponse(messages) {
       return sanitize_urls(content || ERROR_RESPONSE_TEXT);
     } catch (err) {
       console.error("Fast-path LLM call failed:", err);
-      return sanitize_urls(ERROR_RESPONSE_TEXT);
+      return sanitize_urls(isTimeoutError(err) ? TIMEOUT_RESPONSE_TEXT : ERROR_RESPONSE_TEXT);
     }
   }
 
-  // Tool path: full knowledge base + full tool registry.
-  const system = KNOWLEDGE_SYSTEM_PROMPT.replace("{knowledge_base}", loadKnowledgeBase());
-
-  // Deterministic schedule fast path: windowed schedule/date queries are
-  // answered from scraped/cached course data with no LLM call and no tools.
-  // Any non-match (or failure) returns null and falls through to the tool loop.
+  // Live-data path (Pure Composer mode): pre-fetch schedule context server-side and call LLM once.
   const schedule = await getScheduleAnswer(userText, route.lang);
   if (schedule !== null) {
     return sanitize_urls(schedule);
   }
 
+  // KB fallback: if the question has a deterministic quick-answer (e.g. center
+  // address/info detected via BM25) return it immediately — prevents empty
+  // answers when the router misclassifies a center-info question as tools.
+  const quickFallback = getQuickAnswer(userText, route.lang);
+  if (quickFallback !== null) {
+    return sanitize_urls(quickFallback);
+  }
+
+  const liveContext = await buildLiveScheduleContext(userText, route.lang);
+  const baseSystem = KNOWLEDGE_SYSTEM_PROMPT.replace("{knowledge_base}", loadKnowledgeBase());
+  const system = `${baseSystem}\n\n${liveContext}`;
   const apiMessages = [{ role: "system", content: system }, ...messages];
 
   try {
-    let lastText = "";
-
-    for (let step = 0; step < MAX_TOOL_STEPS; step++) {
-      const choice = await callChatCompletion(apiMessages, apiKey, modelId);
-      const message = choice.message || {};
-      if (typeof message.content === "string" && message.content) {
-        lastText = message.content;
-      }
-
-      const toolCalls = Array.isArray(message.tool_calls) ? message.tool_calls : [];
-      if (toolCalls.length === 0) {
-        return sanitize_urls(lastText);
-      }
-
-      // Echo the assistant tool-call message back (drop reasoning_content —
-      // it is not a valid chat-completions request field).
-      apiMessages.push({
-        role: "assistant",
-        content: message.content || "",
-        tool_calls: toolCalls.map((tc) => ({
-          id: tc.id,
-          type: "function",
-          function: { name: tc.function.name, arguments: tc.function.arguments },
-        })),
-      });
-
-      for (const tc of toolCalls) {
-        const result = await executeToolCall(tc);
-        apiMessages.push({ role: "tool", tool_call_id: tc.id, content: truncateToolResult(result) });
-      }
-    }
-
-    // Step cap reached without a plain-text finish.
-    return sanitize_urls(lastText || ERROR_RESPONSE_TEXT);
+    const choice = await callChatCompletion(apiMessages, apiKey, modelId, { tools: false });
+    const content = (choice && choice.message && typeof choice.message.content === "string") ? choice.message.content : "";
+    return sanitize_urls(content || ERROR_RESPONSE_TEXT);
   } catch (err) {
-    // Safe error path: a static bilingual message, never an untrusted URL.
-    console.error("LLM call failed:", err);
-    return sanitize_urls(ERROR_RESPONSE_TEXT);
+    console.error("LLM composer call failed:", err);
+    return sanitize_urls(isTimeoutError(err) ? TIMEOUT_RESPONSE_TEXT : ERROR_RESPONSE_TEXT);
   }
 }
 
@@ -509,6 +492,14 @@ async function runStream(sse, messages) {
         sse.done(sanitize_urls(schedule));
         return;
       }
+      // KB fallback: BM25 quick-answer (e.g. center info) fires even on the
+      // tool path — prevents empty answers when misclassified center-info
+      // questions land here instead of the KB fast path.
+      const quickFallback = getQuickAnswer(userText, route.lang);
+      if (quickFallback !== null) {
+        sse.done(sanitize_urls(quickFallback));
+        return;
+      }
       await streamToolPath(sse, messages, apiKey, modelId);
     }
   } finally {
@@ -564,10 +555,13 @@ async function streamFastPath(sse, messages, lang, apiKey, modelId) {
       // Vercel maxDuration), so fail fast.
       if (full) {
         console.error("Fast model stream failed after producing output:", fastErr);
+        sse.error(ERROR_RESPONSE_TEXT);
       } else {
+        // No output yet + timeout: surface a friendly apology as a normal done
+        // message instead of an error event, so the UI renders it like a reply.
         console.error("Fast model stream timed out with no output:", fastErr);
+        sse.done(sanitize_urls(TIMEOUT_RESPONSE_TEXT));
       }
-      sse.error(ERROR_RESPONSE_TEXT);
       return;
     }
     console.error("Fast model stream failed, retrying once:", fastErr);
@@ -581,7 +575,11 @@ async function streamFastPath(sse, messages, lang, apiKey, modelId) {
       }
     } catch (err) {
       console.error("Fast-path stream retry also failed:", err);
-      sse.error(ERROR_RESPONSE_TEXT);
+      if (isTimeoutError(err)) {
+        sse.done(sanitize_urls(TIMEOUT_RESPONSE_TEXT));
+      } else {
+        sse.error(ERROR_RESPONSE_TEXT);
+      }
       return;
     }
   }
@@ -615,93 +613,37 @@ const STATUS_TOOL_DONE = "Đang tổng hợp câu trả lời… / Compiling the
  * fragments have accumulated, a failure emits `error` instead of retrying.
  */
 async function streamToolPath(sse, messages, apiKey, modelId) {
-  const system = KNOWLEDGE_SYSTEM_PROMPT.replace("{knowledge_base}", loadKnowledgeBase());
+  const lastUser = [...messages].reverse().find((m) => m.role === "user");
+  const userText = lastUser ? lastUser.content : "";
+  const lang = detectLanguage(userText);
+
+  sse.status("Đang tổng hợp câu trả lời… / Compiling answer…");
+
+  const liveContext = await buildLiveScheduleContext(userText, lang);
+  const baseSystem = KNOWLEDGE_SYSTEM_PROMPT.replace("{knowledge_base}", loadKnowledgeBase());
+  const system = `${baseSystem}\n\n${liveContext}`;
   const apiMessages = [{ role: "system", content: system }, ...messages];
 
-  for (let step = 0; step < MAX_TOOL_STEPS; step++) {
-    let stepContent = "";
-    const toolCallAcc = [];
-
-    const runStep = async (useModel) => {
-      stepContent = "";
-      toolCallAcc.length = 0;
-      try {
-        for await (const piece of streamChatCompletion(apiMessages, apiKey, useModel)) {
-          const delta = piece.delta || {};
-          if (typeof delta.content === "string" && delta.content) {
-            stepContent += delta.content;
-          }
-          accumulateToolCalls(toolCallAcc, delta.tool_calls);
-        }
-      } catch (err) {
-        // Tag the error with how much of the step had already been produced so
-        // the caller can decide whether a retry is safe.
-        if (err && typeof err === "object") {
-          err.partial = { content: stepContent, fragments: toolCallAcc.length > 0 };
-        }
-        throw err;
-      }
-    };
-
-    try {
-      await runStep(modelId);
-    } catch (err) {
-      if (err.partial && (err.partial.content || err.partial.fragments)) {
-        // Output was already produced by this step — too late to retry.
-        console.error("Tool-path stream step failed after producing output:", err);
-        sse.error(ERROR_RESPONSE_TEXT);
-        return;
-      }
-      if (isTimeoutError(err)) {
-        // A 50s timeout with no output is a slow/stalled provider — retrying
-        // the same model immediately just doubles the user's wait. Fail fast.
-        console.error("Tool-path stream step timed out with no output:", err);
-        sse.error(ERROR_RESPONSE_TEXT);
-        return;
-      }
-      console.error("Tool-path stream step failed, retrying once:", err);
-      try {
-        await runStep(modelId);
-      } catch (retryErr) {
-        console.error("Tool-path stream step retry also failed:", retryErr);
-        sse.error(ERROR_RESPONSE_TEXT);
-        return;
+  let roller = new RollingSanitizer((inc) => sse.delta(inc));
+  let full = "";
+  try {
+    for await (const piece of streamChatCompletion(apiMessages, apiKey, modelId, { tools: false })) {
+      if (piece.delta && typeof piece.delta.content === "string" && piece.delta.content) {
+        full += piece.delta.content;
+        roller.push(piece.delta.content);
       }
     }
-
-    const toolCalls = toolCallAcc
-      .filter((tc) => tc && tc.name)
-      .map((tc) => ({
-        id: tc.id,
-        type: "function",
-        function: { name: tc.name, arguments: tc.arguments },
-      }));
-
-    if (toolCalls.length === 0 && stepContent) {
-      // Final text-generating step: flush the buffered text and emit done.
-      const roller = new RollingSanitizer((inc) => sse.delta(inc));
-      roller.push(stepContent);
-      sse.done(roller.end());
-      return;
-    }
-    if (toolCalls.length === 0) {
-      // Degenerate response (no text, no tool calls): stop with a static error.
+  } catch (err) {
+    console.error("Composer stream failed:", err);
+    if (isTimeoutError(err)) {
+      sse.done(sanitize_urls(TIMEOUT_RESPONSE_TEXT));
+    } else {
       sse.error(ERROR_RESPONSE_TEXT);
-      return;
     }
-
-    // Echo the assistant tool-call message back and execute the calls.
-    apiMessages.push({ role: "assistant", content: stepContent || "", tool_calls: toolCalls });
-    for (const tc of toolCalls) {
-      sse.status(TOOL_STATUS[tc.function.name] || STATUS_TOOL_GENERIC);
-      const result = await executeToolCall(tc);
-      apiMessages.push({ role: "tool", tool_call_id: tc.id, content: truncateToolResult(result) });
-      sse.status(STATUS_TOOL_DONE);
-    }
+    return;
   }
 
-  // Step cap reached without a plain-text finish.
-  sse.error(ERROR_RESPONSE_TEXT);
+  sse.done(roller.end());
 }
 
 /**
@@ -762,11 +704,10 @@ async function callFastPath(apiMessages, apiKey, modelId) {
 }
 
 /**
- * POST a chat-completions request. Throws on transport or non-2xx errors.
- * Options: { tools: boolean } — pass tools: false to omit tool definitions
- * entirely (fast path), which prevents any tool call on that request.
- */async function callChatCompletion(apiMessages, apiKey, modelId, options = {}) {
-  const useTools = options.tools !== false;
+ * POST a chat-completions request.
+ */
+async function callChatCompletion(apiMessages, apiKey, modelId, options = {}) {
+  const useTools = options.tools === true;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), LLM_TIMEOUT_MS);
 
@@ -825,7 +766,7 @@ async function callFastPath(apiMessages, apiKey, modelId) {
  * while a mid-stream hang still cannot run forever.
  */
 async function* streamChatCompletion(apiMessages, apiKey, modelId, options = {}) {
-  const useTools = options.tools !== false;
+  const useTools = options.tools === true;
   const firstTokenTimeoutMs =
     options.firstTokenTimeoutMs ?? (Number(process.env.FIRST_TOKEN_TIMEOUT_MS) || FIRST_TOKEN_TIMEOUT_MS);
   const controller = new AbortController();

@@ -78,7 +78,7 @@ test("fast path: knowledge-only question sends no tools and a trimmed prompt", a
   assert.ok(!system.includes("## 6-VI."), "full knowledge base is not injected");
 });
 
-test("tool path: live-schedule question attaches tools and the full KB", async () => {
+test("tool path: live-schedule question uses pure composer with pre-fetched schedule context and no tools", async () => {
   requests.length = 0;
   const res = await post([
     { role: "user", content: "Khóa thiền 10 ngày hết chỗ chưa?" },
@@ -86,16 +86,14 @@ test("tool path: live-schedule question attaches tools and the full KB", async (
   const data = await res.json();
 
   assert.equal(data.text, "A curated answer.");
-  assert.equal(requests.length, 1, "single call when the stub returns a plain answer");
+  assert.equal(requests.length, 1, "single composer call when live context is injected");
 
   const body = requests[0].body;
-  assert.ok(Array.isArray(body.tools), "tools attached on the tool path");
-  assert.equal(body.tool_choice, "auto");
-  const names = body.tools.map((t) => t.function && t.function.name);
-  assert.ok(names.includes("list_courses"), "list_courses among the tools");
+  assert.equal(body.tools, undefined, "no tools attached on pure composer path");
+  assert.equal(body.tool_choice, undefined, "no tool_choice on pure composer path");
 
   const system = body.messages[0].content;
-  assert.ok(system.includes("GIỚI LUẬT"), "full knowledge base is injected on the tool path");
+  assert.ok(system.includes("Live Course Schedule Context"), "live schedule context is pre-fetched and injected");
 });
 
 test("ambiguous question flows through the LLM classifier before answering", async () => {

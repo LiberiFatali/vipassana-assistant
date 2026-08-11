@@ -274,7 +274,7 @@ test("fast path streams deltas then done with the complete sanitized text", asyn
   assert.equal(requests[0].body.model, "test-model");
 });
 
-test("fast path timeout with no output emits error without retry", async () => {
+test("fast path timeout with no output emits done with apology (no retry)", async () => {
   answerCache.clear();
   requests.length = 0;
   responses.length = 0;
@@ -283,9 +283,11 @@ test("fast path timeout with no output emits error without retry", async () => {
   const res = await streamPost([{ role: "user", content: "What is the daily timetable?" }]);
   const events = await readEvents(res);
 
-  const error = events.find((e) => e.event === "error");
-  assert.ok(error, "error event emitted after fast-path timeout");
-  assert.equal(events.filter((e) => e.event === "done").length, 0, "no done after the timeout");
+  // Timeout surfaces as a friendly 'done' message, not an error event.
+  const done = events.find((e) => e.event === "done");
+  assert.ok(done, "done event emitted after fast-path timeout");
+  assert.ok(done.data.text.includes("thử lại"), "done text contains the apology");
+  assert.equal(events.filter((e) => e.event === "error").length, 0, "no error event on timeout");
   assert.equal(requests.length, 1, "no retry of a timed-out fast-path call");
 });
 
@@ -300,9 +302,12 @@ test("first-token watchdog aborts a stalled stream and emits error without retry
   const events = await readEvents(res);
 
   delete process.env.FIRST_TOKEN_TIMEOUT_MS;
-  const error = events.find((e) => e.event === "error");
-  assert.ok(error, "error event emitted after the first-token watchdog fired");
-  assert.equal(events.filter((e) => e.event === "done").length, 0, "no done after the watchdog");
+  // The stalled provider fires the first-token watchdog (AbortError), which is
+  // a timeout — surfaces as a friendly 'done' apology, not a raw error event.
+  const done = events.find((e) => e.event === "done");
+  assert.ok(done, "done event emitted after the first-token watchdog fired");
+  assert.ok(done.data.text.includes("thử lại"), "done text contains the apology");
+  assert.equal(events.filter((e) => e.event === "error").length, 0, "no error event on watchdog timeout");
   assert.equal(requests.length, 1, "no retry of a watchdog-timed-out call");
 });
 
@@ -402,39 +407,29 @@ test("cache hit short-circuits to done with no LLM call", async () => {
   assert.ok(done.data.text.includes("A cached biography."));
 });
 
-test("tool path streams status events then final text", async () => {
+test("tool path streams status event then single-pass final text composer", async () => {
   answerCache.clear();
   requests.length = 0;
   responses.length = 0;
-  responses.push([
-    chunk({ role: "assistant" }),
-    chunk({
-      tool_calls: [
-        { index: 0, id: "call_1", type: "function", function: { name: "get_center_info", arguments: '{"center":' } },
-      ],
-    }),
-    chunk({ tool_calls: [{ index: 0, function: { arguments: '"virocana"}' } }] }, "tool_calls"),
-  ]);
-  responses.push([chunk({ content: "Here is the center. " }, "stop")]);
+  responses.push([chunk({ content: "Here is the center information." }, "stop")]);
 
   const res = await streamPost([{ role: "user", content: "Khóa thiền 10 ngày hết chỗ chưa?" }]);
   const events = await readEvents(res);
 
   const statuses = events.filter((e) => e.event === "status");
-  assert.ok(statuses.length >= 1, "status events emitted during tool execution");
+  assert.ok(statuses.length >= 1, "status event emitted during composer preparation");
 
   const deltas = events.filter((e) => e.event === "delta").map((e) => e.data.text).join("");
-  assert.ok(deltas.includes("Here is the center."), "final text streamed as deltas");
+  assert.ok(deltas.includes("Here is the center information."), "final text streamed as deltas");
 
   const done = events.find((e) => e.event === "done");
-  assert.equal(done.data.text, "Here is the center. ");
+  assert.equal(done.data.text, "Here is the center information.");
   assert.equal(events[events.length - 1].event, "done", "done is the last event");
 
-  // Tool path keeps the full tool registry on every LLM call.
-  assert.ok(requests.length >= 2, "tool loop ran more than one LLM call");
-  assert.ok(Array.isArray(requests[0].body.tools), "tools attached on the tool path");
-  const names = requests[0].body.tools.map((t) => t.function && t.function.name);
-  assert.ok(names.includes("get_center_info"), "tool call executed against the registry");
+  // Pure composer mode uses single-pass text generation with no function tool definitions.
+  const finalCall = requests[requests.length - 1];
+  assert.equal(finalCall.body.tools, undefined, "no tools attached on pure composer path");
+  assert.ok(finalCall.body.messages[0].content.includes("Live Course Schedule Context"), "live schedule context pre-fetched");
 });
 
 test("mid-stream provider failure emits a static error event", async () => {
@@ -452,180 +447,10 @@ test("mid-stream provider failure emits a static error event", async () => {
   assert.ok(error.data.text.includes("Xin lỗi"), "static bilingual error message");
 });
 
-test("tool-path step with content before tool_calls preserves the content", async () => {
-  answerCache.clear();
-  requests.length = 0;
-  responses.length = 0;
-  responses.push([
-    chunk({ role: "assistant" }),
-    chunk({ content: "Let me check that for you. " }),
-    chunk({
-      tool_calls: [
-        { index: 0, id: "call_1", type: "function", function: { name: "get_center_info", arguments: '{"center":' } },
-      ],
-    }),
-    chunk({ tool_calls: [{ index: 0, function: { arguments: '"virocana"}' } }] }, "tool_calls"),
-  ]);
-  responses.push([chunk({ content: "Here is the center. " }, "stop")]);
-
-  const res = await streamPost([{ role: "user", content: "Khóa thiền 10 ngày hết chỗ chưa?" }]);
-  const events = await readEvents(res);
-
-  const done = events.find((e) => e.event === "done");
-  assert.ok(done, "done event present");
-  assert.equal(done.data.text, "Here is the center. ");
-
-  // The interleaved content must survive into the echoed assistant message
-  // carried on the final text request (index 1).
-  const echoed = requests[1].body.messages.find((m) => m.role === "assistant" && m.tool_calls);
-  assert.ok(echoed, "assistant tool-call message echoed");
-  assert.equal(echoed.content, "Let me check that for you. ", "interleaved content preserved");
-  assert.equal(echoed.tool_calls.length, 1);
-  assert.equal(echoed.tool_calls[0].function.name, "get_center_info");
-});
-
-test("tool-path fragments a tool_calls arguments string across many deltas", async () => {
-  answerCache.clear();
-  requests.length = 0;
-  responses.length = 0;
-  responses.push([
-    chunk({ role: "assistant" }),
-    chunk({ tool_calls: [{ index: 0, id: "call_1", type: "function", function: { name: "get_center_info", arguments: '{"c' } }] }),
-    chunk({ tool_calls: [{ index: 0, function: { arguments: "ente" } }] }),
-    chunk({ tool_calls: [{ index: 0, function: { arguments: 'r":"' } }] }),
-    chunk({ tool_calls: [{ index: 0, function: { arguments: "virocana" } }] }),
-    chunk({ tool_calls: [{ index: 0, function: { arguments: '"}' } }] }, "tool_calls"),
-  ]);
-  responses.push([chunk({ content: "Done. " }, "stop")]);
-
-  const res = await streamPost([{ role: "user", content: "Khóa thiền 10 ngày hết chỗ chưa?" }]);
-  const events = await readEvents(res);
-
-  const done = events.find((e) => e.event === "done");
-  assert.ok(done, "done event present");
-
-  // Fragments must be joined into a single complete call executed exactly once.
-  // The assistant echo + tool result ride on the final text request (index 1).
-  const echoed = requests[1].body.messages.find((m) => m.role === "assistant" && m.tool_calls);
-  assert.ok(echoed, "assistant tool-call message echoed");
-  assert.equal(echoed.tool_calls.length, 1, "exactly one call");
-  assert.equal(echoed.tool_calls[0].function.arguments, '{"center":"virocana"}', "arguments joined");
-  const toolResults = requests[1].body.messages.filter((m) => m.role === "tool");
-  assert.equal(toolResults.length, 1, "tool executed exactly once");
-});
-
-test("tool-path step failure with no output retries once and completes", async () => {
-  answerCache.clear();
-  requests.length = 0;
-  responses.length = 0;
-  responses.push(PROVIDER_ERROR);
-  responses.push([
-    chunk({ role: "assistant" }),
-    chunk({
-      tool_calls: [
-        { index: 0, id: "call_1", type: "function", function: { name: "get_center_info", arguments: '{"center":"vutthi"}' } },
-      ],
-    }, "tool_calls"),
-  ]);
-  responses.push([chunk({ content: "All set. " }, "stop")]);
-
-  const res = await streamPost([{ role: "user", content: "Khóa thiền 10 ngày hết chỗ chưa?" }]);
-  const events = await readEvents(res);
-
-  const done = events.find((e) => e.event === "done");
-  assert.ok(done, "retry produced a done event");
-  assert.equal(done.data.text, "All set. ");
-  assert.equal(requests.length, 3, "first step failed then retried, then final text");
-  assert.equal(requests[1].body.model, "test-model", "retry used AGENT_MODEL");
-});
-
-test("tool-path failure after output emits error with no retry", async () => {
-  answerCache.clear();
-  requests.length = 0;
-  responses.length = 0;
-  responses.push([
-    chunk({ role: "assistant" }),
-    chunk({
-      tool_calls: [
-        { index: 0, id: "call_1", type: "function", function: { name: "get_center_info", arguments: '{"center":"virocana"}' } },
-      ],
-    }, "tool_calls"),
-  ]);
-  responses.push(PROVIDER_PARTIAL_ERROR);
-
-  const res = await streamPost([{ role: "user", content: "Khóa thiền 10 ngày hết chỗ chưa?" }]);
-  const events = await readEvents(res);
-
-  const error = events.find((e) => e.event === "error");
-  assert.ok(error, "error event emitted after output began");
-  assert.equal(events.filter((e) => e.event === "done").length, 0, "no done after the failure");
-  assert.equal(requests.length, 2, "no retry after output was already produced");
-});
-
-test("tool-path timeout with no output emits error without retry", async () => {
-  answerCache.clear();
-  requests.length = 0;
-  responses.length = 0;
-  responses.push(PROVIDER_TIMEOUT);
-
-  const res = await streamPost([{ role: "user", content: "Khóa thiền 10 ngày hết chỗ chưa?" }]);
-  const events = await readEvents(res);
-
-  const error = events.find((e) => e.event === "error");
-  assert.ok(error, "error event emitted after timeout");
-  assert.equal(events.filter((e) => e.event === "done").length, 0, "no done after the timeout");
-  assert.equal(requests.length, 1, "no retry of a timed-out call");
-});
-
-test("oversized tool result is truncated in the next LLM request", async () => {
-  answerCache.clear();
-  requests.length = 0;
-  responses.length = 0;
-  responses.push([
-    chunk({ role: "assistant" }),
-    chunk({
-      tool_calls: [
-        {
-          index: 0,
-          id: "call_1",
-          type: "function",
-          function: {
-            name: "get_course_details",
-            arguments: '{"apply_url":"https://schedule.vridhamma.org/en/courses/1234"}',
-          },
-        },
-      ],
-    }, "tool_calls"),
-  ]);
-  responses.push([chunk({ content: "Details above. " }, "stop")]);
-
-  const res = await streamPost([{ role: "user", content: "Khóa thiền 10 ngày hết chỗ chưa?" }]);
-  const events = await readEvents(res);
-
-  const done = events.find((e) => e.event === "done");
-  assert.ok(done, "done event present");
-
-  // The scraper fetch is a non-LLM request, so the final LLM call is index 2.
-  const finalCall = requests.find((r) => r.isLLM && r.body.messages && r.body.messages.some((m) => m.role === "tool"));
-  assert.ok(finalCall, "final LLM call carries the tool result");
-  const toolMsg = finalCall.body.messages.find((m) => m.role === "tool");
-  assert.ok(toolMsg.content.endsWith("[truncated]"), "oversized result truncated with a marker");
-  assert.ok(toolMsg.content.length <= 8192 + 20, "echoed content bounded");
-  assert.ok(!toolMsg.content.includes('"registration_notes"'), "truncated before the tail of the JSON");
-});
-
 test("tool-path final text gates an untrusted URL split across chunks", async () => {
   answerCache.clear();
   requests.length = 0;
   responses.length = 0;
-  responses.push([
-    chunk({ role: "assistant" }),
-    chunk({
-      tool_calls: [
-        { index: 0, id: "call_1", type: "function", function: { name: "get_center_info", arguments: '{"center":"virocana"}' } },
-      ],
-    }, "tool_calls"),
-  ]);
   responses.push([
     chunk({ content: "Visit https://evi" }),
     chunk({ content: "l.com " }),
@@ -642,28 +467,4 @@ test("tool-path final text gates an untrusted URL split across chunks", async ()
   assert.ok(!streamed.includes("evil.com"), "no untrusted URL in the deltas");
   assert.ok(done.data.text.includes("[🔒"), "safety notice in done");
   assert.ok(!done.data.text.includes("evil.com"), "no untrusted URL in done");
-});
-
-test("tools-only tool path hits the step cap and emits error instead of hanging", async () => {
-  answerCache.clear();
-  requests.length = 0;
-  responses.length = 0;
-  for (let i = 0; i < 5; i++) {
-    responses.push([
-      chunk({ role: "assistant" }),
-      chunk({
-        tool_calls: [
-          { index: 0, id: `call_${i}`, type: "function", function: { name: "get_center_info", arguments: '{"center":"virocana"}' } },
-        ],
-      }, "tool_calls"),
-    ]);
-  }
-
-  const res = await streamPost([{ role: "user", content: "Khóa thiền 10 ngày hết chỗ chưa?" }]);
-  const events = await readEvents(res);
-
-  const error = events.find((e) => e.event === "error");
-  assert.ok(error, "error event emitted on step cap");
-  assert.equal(events.filter((e) => e.event === "done").length, 0, "no done after step cap");
-  assert.equal(requests.length, 5, "five tool steps ran before the cap");
 });

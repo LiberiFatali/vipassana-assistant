@@ -24,6 +24,40 @@ test("vutthi address in English", () => {
   assert.ok(out.includes("https://schedule.vridhamma.org/courses/vutthi"));
 });
 
+test("vutthi directions query in Vietnamese — explicit chỉ đường", () => {
+  const out = getQuickAnswer("chỉ đường cho tôi đến trung tâm ở HCM", "vi");
+  assert.ok(out.includes("Dhamma Vutthi"));
+  assert.ok(out.includes("Củ Chi"));
+});
+
+test("virocana directions — paraphrase without keyword (BM25 semantic match)", () => {
+  // No explicit keyword — BM25 must detect 'address/navigation' intent from context
+  const out = getQuickAnswer("Làm sao đi đến trung tâm thiền Hà Nội?", "vi");
+  assert.ok(out !== null, "BM25 should detect navigation intent");
+  assert.ok(out.includes("Dhamma Virocana"));
+});
+
+test("vutthi navigation via transport mode — BM25 generalizes to taxi/grab", () => {
+  const out = getQuickAnswer("Đi grab đến Dhamma Vutthi như thế nào?", "vi");
+  assert.ok(out !== null, "BM25 should score grab/taxi tokens against address exemplar");
+  assert.ok(out.includes("Dhamma Vutthi"));
+});
+
+test("English directions paraphrase — how to get to", () => {
+  const out = getQuickAnswer("How do I get to Dhamma Vutthi?", "en");
+  assert.ok(out !== null, "BM25 should match 'how to get' navigation intent");
+  assert.ok(out.includes("Dhamma Vutthi"));
+});
+
+test("general center info intent — broad query returns all fields", () => {
+  const out = getQuickAnswer("Cho tôi biết về trung tâm ở HCM", "vi");
+  assert.ok(out !== null, "general intent should fire for broad center info query");
+  assert.ok(out.includes("Dhamma Vutthi"));
+  // general intent includes address + phone + email + website
+  assert.ok(out.includes("112, đường 628"));
+  assert.ok(out.includes("+84 942 255 050"));
+});
+
 test("vutthi phone in Vietnamese", () => {
   const out = getQuickAnswer("Điện thoại trung tâm thiền TP Hồ Chí Minh?", "vi");
   assert.ok(out.includes("+84 942 255 050"));
