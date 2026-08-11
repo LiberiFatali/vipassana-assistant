@@ -439,7 +439,7 @@
         const content = inputEl.value.trim();
         if (!content) return;
 
-        // Sending a new message cancels any in-flight stream.
+        // Sending a new message cancels any in-flight request.
         if (activeController) {
           activeController.abort();
           activeController = null;
@@ -452,8 +452,8 @@
         history.push({ role: "user", content });
         saveHistory();
 
-        // Create the agent bubble now; it fills in incrementally as deltas
-        // arrive, and settles to the authoritative `done` text.
+        sendBtn.disabled = true;
+
         const agentWrap = document.createElement("div");
         agentWrap.className = "message agent";
         const bubble = document.createElement("div");
@@ -474,35 +474,16 @@
         activeController = controller;
 
         let fullText = "";
-        let statusEl = null;
         let settled = false;
-        let rafPending = false;
-
-        function scheduleRender() {
-          if (rafPending) return;
-          rafPending = true;
-          requestAnimationFrame(() => {
-            rafPending = false;
-            bubble.innerHTML = renderMarkdown(fullText);
-            chatEl.scrollTop = chatEl.scrollHeight;
-          });
-        }
-
-        function showStatus(message) {
-          removeThinking();
-          if (!statusEl) {
-            statusEl = document.createElement("div");
-            statusEl.className = "thinking";
-            agentWrap.insertBefore(statusEl, bubble);
-          }
-          statusEl.textContent = message;
-        }
 
         function finish(text) {
           if (typeof text === "string") fullText = text;
-          if (statusEl) { statusEl.remove(); statusEl = null; }
           removeThinking();
-          bubble.innerHTML = renderMarkdown(fullText);
+          if (fullText) {
+            bubble.innerHTML = renderMarkdown(fullText);
+          } else {
+            agentWrap.remove();
+          }
           chatEl.scrollTop = chatEl.scrollHeight;
         }
 
@@ -519,81 +500,24 @@
           }
         }
 
-        let watchdogTimer = null;
-        function resetWatchdog() {
-          if (watchdogTimer) clearTimeout(watchdogTimer);
-          watchdogTimer = setTimeout(() => {
-            if (!fullText) {
-              controller.abort();
-            }
-          }, 15000);
-        }
-
         try {
-          resetWatchdog();
-          const res = await fetch("/api/chat?stream=1", {
+          const res = await fetch("/api/chat", {
             method: "POST",
-            headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ messages: history.slice(-MAX_MESSAGES) }),
             signal: controller.signal,
           });
-          if (!res.ok || !res.body) throw new Error("streaming request failed");
-
-          const reader = res.body.getReader();
-          const decoder = new TextDecoder();
-          let buf = "";
-
-          function handleFrame(event, data) {
-            resetWatchdog();
-            if (event === "status") {
-              showStatus(data.message || "");
-            } else if (event === "delta") {
-              if (statusEl) { statusEl.remove(); statusEl = null; }
-              removeThinking();
-              fullText += data.text || "";
-              scheduleRender();
-            } else if (event === "done") {
-              finish(data && typeof data.text === "string" ? data.text : null);
-            } else if (event === "error") {
-              finish(data && typeof data.text === "string" ? data.text : I18N[lang].error);
-            }
-          }
-
-          for (;;) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buf += decoder.decode(value, { stream: true });
-            let idx;
-            while ((idx = buf.indexOf("\n\n")) !== -1) {
-              const frame = buf.slice(0, idx);
-              buf = buf.slice(idx + 2);
-              let event = "message";
-              let dataStr = "";
-              for (const line of frame.split("\n")) {
-                if (line.startsWith("event:")) event = line.slice(6).trim();
-                else if (line.startsWith("data:")) dataStr += line.slice(5).trim();
-              }
-              if (!dataStr || dataStr === "[DONE]") continue;
-              let data;
-              try { data = JSON.parse(dataStr); } catch { continue; }
-              handleFrame(event, data);
-            }
-          }
-          if (!fullText) {
-            finish(I18N[lang].error);
-          } else {
-            removeThinking();
-          }
+          if (!res.ok) throw new Error("Request failed");
+          const data = await res.json();
+          const text = data && typeof data.text === "string" ? data.text : I18N[lang].error;
+          finish(text);
         } catch (err) {
           if (err && err.name === "AbortError") {
-            // Cancelled by a new message / Clear chat. Keep whatever partial
-            // (sanitized) text was rendered so far.
-            finish(fullText || null);
+            finish(null);
           } else {
             finish(I18N[lang].error);
           }
         } finally {
-          if (watchdogTimer) clearTimeout(watchdogTimer);
           settle();
         }
       }

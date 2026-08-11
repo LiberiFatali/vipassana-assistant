@@ -8,9 +8,9 @@
  *
  * Direct fetch on purpose: the Zen endpoint is plain OpenAI-compatible and the
  * previous AI SDK layer (ai + @ai-sdk/openai-compatible) added ~12MB of deps
- * and an SDK-version churn bug in the auto tool loop. Non-streaming by design
- * so URL sanitization happens at the single trustworthy point on the complete
- * final text.
+ * and an SDK-version churn bug in the auto tool loop. Standard non-streaming
+ * response model where URL sanitization happens at a single trustworthy point
+ * on the complete final text.
  */
 import { KNOWLEDGE_SYSTEM_PROMPT } from "../lib/system-prompt.js";
 import { loadKnowledgeBase } from "../lib/knowledge.js";
@@ -25,14 +25,12 @@ import { answerCache } from "../lib/answer-cache.js";
 import { getCenterInfo, getCenterInfoInputSchema } from "../lib/tools/get-center-info.js";
 import { getCourseDetails, getCourseDetailsInputSchema } from "../lib/tools/get-course-details.js";
 import { listCourses, listCoursesInputSchema } from "../lib/tools/list-courses.js";
-import { RollingSanitizer, SSEWriter } from "../lib/stream.js";
 
 const MAX_MESSAGES = 20;
 const MAX_REQUEST_MESSAGES = 100;
 const MAX_MESSAGE_LENGTH = 20000;
 const MAX_TOOL_STEPS = 5;
 const LLM_TIMEOUT_MS = 100000;
-const FIRST_TOKEN_TIMEOUT_MS = 50000;
 const TOOL_RESULT_ECHO_MAX = 8192;
 
 // ─── CORS ────────────────────────────────────────────────────────────────────
@@ -300,24 +298,6 @@ export async function POST(request) {
     content: m.content,
   }));
 
-  // Streaming negotiation: opt-in via `Accept: text/event-stream` or `?stream=1`.
-  const wantsStream =
-    (request.headers.get("accept") || "").includes("text/event-stream") ||
-    new URL(request.url).searchParams.get("stream") === "1";
-
-  if (wantsStream) {
-    return new Response(generateAgentStream(trimmed), {
-      status: 200,
-      headers: {
-        ...corsHeaders,
-        "Content-Type": "text/event-stream; charset=utf-8",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
-        "X-Accel-Buffering": "no",
-      },
-    });
-  }
-
   const text = await generateAgentResponse(trimmed);
   return Response.json({ text }, { headers: corsHeaders });
 }
@@ -417,236 +397,6 @@ async function generateAgentResponse(messages) {
 }
 
 /**
- * Streaming response path. Returns a web ReadableStream that emits SSE frames:
- * `status` (tool-loop progress), `delta` (sanitized text increments), `done`
- * (complete sanitized answer — always the success terminator) or `error`
- * (static bilingual message on mid-stream failure). Every emitted byte passes
- * through the rolling sanitizer, preserving the trusted-domain invariant.
- */
-function generateAgentStream(messages) {
-  return new ReadableStream({
-    start(controller) {
-      const sse = new SSEWriter({
-        write: (chunk) => controller.enqueue(chunk),
-        close: () => {
-          try {
-            controller.close();
-          } catch {
-            /* already closed */
-          }
-        },
-      });
-      runStream(sse, messages).catch((err) => {
-        console.error("Stream failed:", err);
-        try {
-          sse.error(ERROR_RESPONSE_TEXT);
-        } catch {
-          /* sink closed */
-        }
-        try {
-          sse.close();
-        } catch {
-          /* sink closed */
-        }
-      });
-    },
-  });
-}
-
-async function runStream(sse, messages) {
-  try {
-    const apiKey = process.env.OPENCODE_API_KEY;
-    if (!apiKey) {
-      warnApiKeyMissing();
-      sse.done(sanitize_urls(ERROR_RESPONSE_TEXT));
-      return;
-    }
-    const modelId = resolveModel();
-
-    const lastUser = [...messages].reverse().find((m) => m.role === "user");
-    const userText = lastUser ? lastUser.content : "";
-
-    // Out-of-scope gate: deterministic fallback short-circuits to done with no
-    // LLM call, before routing so it overrides both the KB fast path and the
-    // tool path.
-    const outOfScope = getOutOfScopeAnswer(userText, detectLanguage(userText));
-    if (outOfScope !== null) {
-      sse.done(sanitize_urls(outOfScope));
-      return;
-    }
-
-    let route;
-    try {
-      route = await classifyIntent(userText, apiKey, modelId);
-    } catch (err) {
-      console.error("Intent routing failed, defaulting to tool path:", err);
-      route = { kind: "tools" };
-    }
-
-    if (route.kind === "kb") {
-      await streamFastPath(sse, messages, route.lang, apiKey, modelId);
-    } else {
-      // Deterministic schedule fast path short-circuits before the tool loop.
-      const schedule = await getScheduleAnswer(userText, route.lang);
-      if (schedule !== null) {
-        sse.done(sanitize_urls(schedule));
-        return;
-      }
-      // KB fallback: BM25 quick-answer (e.g. center info) fires even on the
-      // tool path — prevents empty answers when misclassified center-info
-      // questions land here instead of the KB fast path.
-      const quickFallback = getQuickAnswer(userText, route.lang);
-      if (quickFallback !== null) {
-        sse.done(sanitize_urls(quickFallback));
-        return;
-      }
-      await streamToolPath(sse, messages, apiKey, modelId);
-    }
-  } finally {
-    try {
-      sse.close();
-    } catch {
-      /* sink closed */
-    }
-  }
-}
-
-/**
- * KB fast path, streamed. Order matches the non-streaming path:
- * 1) deterministic quick-answer -> `done` immediately (no LLM, no tools);
- * 2) answer-cache hit -> `done` immediately;
- * 3) stream the FAST_MODEL call (no tools, trimmed prompt) with one retry to
- *    AGENT_MODEL before the first delta is emitted; a mid-stream failure emits
- *    the static `error` event. The complete answer is cached after streaming.
- */
-async function streamFastPath(sse, messages, lang, apiKey, modelId) {
-  const lastUser = [...messages].reverse().find((m) => m.role === "user");
-  const userText = lastUser ? lastUser.content : "";
-
-  const quick = getQuickAnswer(userText, lang);
-  if (quick !== null) {
-    sse.done(sanitize_urls(quick));
-    return;
-  }
-
-  const cacheKey = `${lang}|${normalize(userText)}`;
-  const cached = answerCache.get(cacheKey);
-  if (cached !== null) {
-    sse.done(sanitize_urls(cached));
-    return;
-  }
-
-  const system = buildFastPathSystemPrompt(userText, lang);
-  const apiMessages = [{ role: "system", content: system }, ...messages];
-
-  let roller = new RollingSanitizer((inc) => sse.delta(inc));
-  let full = "";
-  try {
-    for await (const piece of streamChatCompletion(apiMessages, apiKey, modelId, { tools: false })) {
-      if (piece.delta && typeof piece.delta.content === "string" && piece.delta.content) {
-        full += piece.delta.content;
-        roller.push(piece.delta.content);
-      }
-    }
-  } catch (fastErr) {
-    if (full || isTimeoutError(fastErr)) {
-      // Output already produced, or the model stalled with no output (first-token
-      // watchdog or overall timeout) — retrying would double the wait (and exceed
-      // Vercel maxDuration), so fail fast.
-      if (full) {
-        console.error("Fast model stream failed after producing output:", fastErr);
-        sse.error(ERROR_RESPONSE_TEXT);
-      } else {
-        // No output yet + timeout: surface a friendly apology as a normal done
-        // message instead of an error event, so the UI renders it like a reply.
-        console.error("Fast model stream timed out with no output:", fastErr);
-        sse.done(sanitize_urls(TIMEOUT_RESPONSE_TEXT));
-      }
-      return;
-    }
-    console.error("Fast model stream failed, retrying once:", fastErr);
-    roller = new RollingSanitizer((inc) => sse.delta(inc));
-    try {
-      for await (const piece of streamChatCompletion(apiMessages, apiKey, modelId, { tools: false })) {
-        if (piece.delta && typeof piece.delta.content === "string" && piece.delta.content) {
-          full += piece.delta.content;
-          roller.push(piece.delta.content);
-        }
-      }
-    } catch (err) {
-      console.error("Fast-path stream retry also failed:", err);
-      if (isTimeoutError(err)) {
-        sse.done(sanitize_urls(TIMEOUT_RESPONSE_TEXT));
-      } else {
-        sse.error(ERROR_RESPONSE_TEXT);
-      }
-      return;
-    }
-  }
-
-  if (full) {
-    answerCache.set(cacheKey, full);
-  }
-  sse.done(roller.end());
-}
-
-// Bilingual status messages shown while the tool loop runs.
-const TOOL_STATUS = {
-  list_courses: "Đang tra cứu lịch khóa thiền… / Looking up course schedules…",
-  get_course_details: "Đang tìm thông tin khóa thiền… / Fetching course details…",
-  get_center_info: "Đang lấy thông tin trung tâm… / Getting center info…",
-};
-const STATUS_TOOL_GENERIC = "Đang tìm kiếm thông tin… / Looking things up…";
-const STATUS_TOOL_DONE = "Đang tổng hợp câu trả lời… / Compiling the answer…";
-
-/**
- * Tool path, streamed. Runs the tool loop with streaming LLM calls; emits a
- * `status` event before/after tool execution and streams the final
- * text-generating call as `delta` events. Keeps the full knowledge base and
- * full tool registry. On step cap or mid-stream failure emits `error`.
- *
- * Each step is classified AFTER its stream ends (never from the first delta):
- * content is buffered and tool_calls are accumulated for the whole step, then
- * the step is a tool step (any complete tool call), a final text step (content
- * and no tool calls), or degenerate (neither) which emits `error`. A step
- * failure retries once before any output is emitted; once content or tool-call
- * fragments have accumulated, a failure emits `error` instead of retrying.
- */
-async function streamToolPath(sse, messages, apiKey, modelId) {
-  const lastUser = [...messages].reverse().find((m) => m.role === "user");
-  const userText = lastUser ? lastUser.content : "";
-  const lang = detectLanguage(userText);
-
-  sse.status("Đang tổng hợp câu trả lời… / Compiling answer…");
-
-  const liveContext = await buildLiveScheduleContext(userText, lang);
-  const baseSystem = KNOWLEDGE_SYSTEM_PROMPT.replace("{knowledge_base}", loadKnowledgeBase());
-  const system = `${baseSystem}\n\n${liveContext}`;
-  const apiMessages = [{ role: "system", content: system }, ...messages];
-
-  let roller = new RollingSanitizer((inc) => sse.delta(inc));
-  let full = "";
-  try {
-    for await (const piece of streamChatCompletion(apiMessages, apiKey, modelId, { tools: false })) {
-      if (piece.delta && typeof piece.delta.content === "string" && piece.delta.content) {
-        full += piece.delta.content;
-        roller.push(piece.delta.content);
-      }
-    }
-  } catch (err) {
-    console.error("Composer stream failed:", err);
-    if (isTimeoutError(err)) {
-      sse.done(sanitize_urls(TIMEOUT_RESPONSE_TEXT));
-    } else {
-      sse.error(ERROR_RESPONSE_TEXT);
-    }
-    return;
-  }
-
-  sse.done(roller.end());
-}
-
-/**
  * Bound the size of a tool result echoed back into the conversation. The full
  * result is what the tool returned; only the echo into `apiMessages` is
  * truncated so an oversized `list_courses` payload cannot balloon the next
@@ -657,26 +407,6 @@ function truncateToolResult(result) {
     return result;
   }
   return result.slice(0, TOOL_RESULT_ECHO_MAX) + "\n…[truncated]";
-}
-
-/**
- * Accumulate OpenAI-style streamed `tool_calls` delta fragments (keyed by
- * `index`) into complete calls. Each fragment carries the `id`/`name` on its
- * first occurrence and the JSON `arguments` string may be split across chunks.
- */
-function accumulateToolCalls(acc, deltas) {
-  if (!Array.isArray(deltas)) return;
-  for (const frag of deltas) {
-    const index = frag.index || 0;
-    if (!acc[index]) acc[index] = { id: "", name: "", arguments: "" };
-    if (frag.id) acc[index].id = frag.id;
-    if (frag.function) {
-      if (frag.function.name) acc[index].name = frag.function.name;
-      if (typeof frag.function.arguments === "string" && frag.function.arguments) {
-        acc[index].arguments += frag.function.arguments;
-      }
-    }
-  }
 }
 
 /**
@@ -754,151 +484,4 @@ async function callChatCompletion(apiMessages, apiKey, modelId, options = {}) {
     throw new Error("LLM API returned no choices");
   }
   return choice;
-}
-
-/**
- * POST a streaming chat-completions request and yield provider SSE deltas.
- * Yields `{ delta, finishReason }` for each content/tool-call piece. Throws on
- * transport errors, non-2xx responses, or a stream read failure so callers can
- * fall back before the first delta is emitted. One abort timer is armed at
- * `firstTokenTimeoutMs` (default ~10s) and re-armed at `LLM_TIMEOUT_MS` once
- * the first content/tool-call delta arrives, so a stalled model fails fast
- * while a mid-stream hang still cannot run forever.
- */
-async function* streamChatCompletion(apiMessages, apiKey, modelId, options = {}) {
-  const useTools = options.tools === true;
-  const firstTokenTimeoutMs =
-    options.firstTokenTimeoutMs ?? (Number(process.env.FIRST_TOKEN_TIMEOUT_MS) || FIRST_TOKEN_TIMEOUT_MS);
-  const controller = new AbortController();
-
-  let firstDeltaSeen = false;
-  const armTimer = () =>
-    setTimeout(() => controller.abort(), firstDeltaSeen ? LLM_TIMEOUT_MS : firstTokenTimeoutMs);
-  let timer = armTimer();
-
-  const payload = { model: modelId, messages: apiMessages, stream: true };
-  if (useTools) {
-    payload.tools = TOOLS.map((t) => ({
-      type: "function",
-      function: { name: t.name, description: t.description, parameters: t.parameters },
-    }));
-    payload.tool_choice = "auto";
-  }
-
-  let res;
-  try {
-    res = await fetch(LLM_CHAT_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(payload),
-      signal: controller.signal,
-    });
-  } catch (err) {
-    clearTimeout(timer);
-    throw err;
-  }
-
-  if (!res.ok || !res.body) {
-    clearTimeout(timer);
-    let detail = `LLM API error ${res.status}`;
-    try {
-      const data = await res.json();
-      detail += `: ${JSON.stringify(data).slice(0, 300)}`;
-    } catch {
-      /* non-JSON error body */
-    }
-    throw new Error(detail);
-  }
-
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buf = "";
-
-  function* framesOf(frame) {
-    for (const line of frame.split("\n")) {
-      if (!line.startsWith("data:")) continue;
-      const dataStr = line.slice(5).trim();
-      if (!dataStr || dataStr === "[DONE]") continue;
-      let chunk;
-      try {
-        chunk = JSON.parse(dataStr);
-      } catch {
-        continue;
-      }
-      const choice = chunk.choices && chunk.choices[0];
-      if (choice && choice.delta) {
-        // Any delta proves the stream is alive: content, tool-call fragments,
-        // or reasoning tokens. Reasoning models emit `reasoning`/
-        // `reasoning_content` before any content, so counting them as liveness
-        // prevents a slow-to-content (but working) model from being falsely
-        // aborted by the first-token watchdog.
-        if (
-          !firstDeltaSeen &&
-          (choice.delta.content ||
-            choice.delta.tool_calls ||
-            choice.delta.reasoning ||
-            choice.delta.reasoning_content)
-        ) {
-          firstDeltaSeen = true;
-          clearTimeout(timer);
-          timer = armTimer();
-        }
-        yield { delta: choice.delta, finishReason: choice.finish_reason };
-      }
-    }
-  }
-
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      let idx;
-      while ((idx = buf.indexOf("\n\n")) !== -1) {
-        const frame = buf.slice(0, idx);
-        buf = buf.slice(idx + 2);
-        yield* framesOf(frame);
-      }
-    }
-    buf += decoder.decode();
-    if (buf) yield* framesOf(buf);
-  } finally {
-    clearTimeout(timer);
-    try {
-      reader.releaseLock();
-    } catch {
-      /* already released */
-    }
-  }
-}
-
-/**
- * Execute a single tool call and serialize its result as the tool message
- * content. Errors are returned to the model as JSON so it can adapt instead of
- * aborting the whole response.
- */
-async function executeToolCall(toolCall) {
-  const fn = toolCall && toolCall.function;
-  const name = fn && fn.name;
-  const toolDef = TOOLS.find((t) => t.name === name);
-  if (!toolDef) {
-    return JSON.stringify({ error: `Unknown tool: ${name}` });
-  }
-
-  let args;
-  try {
-    args = JSON.parse(fn.arguments || "{}");
-  } catch {
-    return JSON.stringify({ error: `Invalid tool arguments JSON: ${fn.arguments}` });
-  }
-
-  try {
-    const result = await toolDef.execute(toolDef.parse(args));
-    return JSON.stringify(result);
-  } catch (err) {
-    return JSON.stringify({ error: err && err.message ? err.message : String(err) });
-  }
 }

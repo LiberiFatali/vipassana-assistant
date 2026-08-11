@@ -48,26 +48,9 @@ vercel dev   # serves the same app on http://localhost:3000
 
 `POST /api/chat` accepts a JSON body `{ "messages": [{ "role": "user", "content": "..." }] }`.
 
-### Non-streaming (default)
+### Response Format
 
 Returns JSON `{ "text": "..." }` with `Content-Type: application/json`.
-
-### Streaming (SSE)
-
-Send an `Accept: text/event-stream` header or append `?stream=1` to the URL. The
-response is `Content-Type: text/event-stream` and each SSE frame has an `event`
-type and a JSON `data` payload:
-
-| event    | data                                   | meaning                                             |
-| -------- | -------------------------------------- | --------------------------------------------------- |
-| `status` | `{ "text": "..." }`                    | tool-path progress message (before/after tool steps)|
-| `delta`  | `{ "text": "..." }`                    | incremental, sanitized answer fragment              |
-| `done`   | `{ "text": "..." }`                    | complete sanitized answer (last event)              |
-| `error`  | `{ "text": "..." }`                    | static bilingual error (no `done` follows)          |
-
-Frames end with `data: [DONE]`. On the KB fast path a deterministic quick-answer
-or a cache hit short-circuits straight to `done` with no `delta`. Every fragment
-(including `delta`) passes through `sanitize_urls()`.
 
 ## Running tests
 
@@ -96,7 +79,6 @@ public/index.html        # single static chat UI (bilingual, dark theme, no buil
 public/markdown.js       # zero-dependency markdown renderer (escape-first, trusted-domain-gated links)
 server.js                # local dev server (npm run dev) — static public/ + routes /api/chat
 api/chat.js              # POST /api/chat — intent router → fast path or tool loop → sanitized output
-lib/stream.js            # SSE writer + rolling URL sanitizer for streaming responses
 lib/router.js            # bilingual (EN/VI) intent router: knowledge-only vs live-data (+ tiny LLM fallback)
 lib/quick-answers.js     # deterministic no-LLM answers (center info, Vipassana definition) for the fast path
 lib/answer-cache.js      # in-memory TTL cache for repeated fast-path answers
@@ -116,7 +98,6 @@ tests/sections.test.mjs  # knowledge sectioning + fast-path prompt suite (node -
 tests/chat-path.test.mjs # request-path integration suite (stubbed fetch)
 tests/quick-answers.test.mjs # deterministic-answer suite (node --test)
 tests/answer-cache.test.mjs  # answer-cache suite (node --test)
-tests/stream.test.mjs    # streaming negotiation + SSE event suite (stubbed fetch)
 vercel.json              # function maxDuration + region (sin1)
 ```
 
