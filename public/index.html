@@ -328,7 +328,7 @@
           placeholder: "Ask about courses, schedules, or the Code of Discipline...",
           centersTitle: "Centers &amp; Official Links",
           schedule: "Course schedule",
-          contactEmail: "Contact email: explorerkr@gmail.com",
+          contactEmail: "Feedback on the chatbot: explorerkr@gmail.com",
           thinking: "Thinking",
           error: "Sorry, something went wrong while processing your request. Please try again later.",
           welcome: "Hello! I am the Vipassana course assistant for UCENLIST. Ask me about Vipassana, Mr. S.N. Goenka, the Code of Discipline, the daily timetable, or upcoming course schedules in Hanoi and Ho Chi Minh City.",
@@ -386,11 +386,18 @@
         document.querySelectorAll("[data-i18n-aria]").forEach((el) => {
           el.setAttribute("aria-label", t[el.getAttribute("data-i18n-aria")] || el.getAttribute("aria-label"));
         });
+        if (history.length === 0) {
+          const welcomeBubble = chatEl.querySelector('[data-welcome="1"] .bubble');
+          if (welcomeBubble) {
+            welcomeBubble.innerHTML = renderMarkdown(welcomeText());
+          }
+        }
       }
 
-      function addMessage(role, content) {
+      function addMessage(role, content, isWelcome = false) {
         const wrap = document.createElement("div");
         wrap.className = "message " + role;
+        if (isWelcome) wrap.dataset.welcome = "1";
         const bubble = document.createElement("div");
         bubble.className = "bubble";
         if (role === "agent") {
@@ -567,12 +574,12 @@
       }
 
       function init() {
-        applyLang();
         if (history.length === 0) {
-          addMessage("agent", welcomeText());
+          addMessage("agent", welcomeText(), true);
         } else {
           history.forEach((m) => addMessage(m.role === "user" ? "user" : "agent", m.content));
         }
+        applyLang();
         inputEl.focus();
       }
 
@@ -584,7 +591,8 @@
         history = [];
         saveHistory();
         chatEl.innerHTML = "";
-        addMessage("agent", welcomeText());
+        addMessage("agent", welcomeText(), true);
+        applyLang();
       }
 
       langToggle.vi.addEventListener("click", () => { lang = "vi"; localStorage.setItem(langKey, "vi"); applyLang(); });
