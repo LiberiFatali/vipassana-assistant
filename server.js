@@ -113,5 +113,5 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`Vipassana UCENLIST chatbot running at http://localhost:${PORT}`);
+  console.log(`Vipassana Chatbot Assistant running at http://localhost:${PORT}`);
 });

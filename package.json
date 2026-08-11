@@ -1,9 +1,9 @@
 {
-  "name": "vipassana-ucenlist-agent",
+  "name": "vipassana-assistant",
   "version": "2.0.0",
   "private": true,
   "type": "module",
-  "description": "Bilingual Vipassana UCENLIST chatbot agent deployed on Vercel with OpenCode Zen LLM access.",
+  "description": "Bilingual Vipassana meditation chatbot assistant deployed on Vercel.",
   "scripts": {
     "dev": "node --env-file=.env server.js",
     "start": "node --env-file=.env server.js",

@@ -1,6 +1,6 @@
-# vipassana-ucenlist-agent
+# vipassana-assistant
 
-The Vipassana UCENLIST Chatbot — a bilingual (Vietnamese/English) AI assistant for Vipassana meditation course information and live schedules at UCENLIST centers in Vietnam. Deployed as a Vercel project (Node.js serverless functions + static frontend), using OpenCode Zen for free LLM access.
+The Vipassana Chatbot Assistant — a bilingual (Vietnamese/English) AI assistant for Vipassana meditation course information and live schedules at centers in Vietnam. Deployed as a Vercel project at `vipassana-assistant.vercel.app` (Node.js serverless functions + static frontend), using OpenCode Zen for LLM access.
 
 > **For contributors**: `AGENTS.md` is the canonical guide for agent tools — architecture, request flow, security model, and the spec-driven workflow.
 

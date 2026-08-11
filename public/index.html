@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Vipassana UCENLIST Chatbot</title>
-  <meta name="description" content="Trợ lý song ngữ về thiền Vipassana tại UCENLIST (Việt Nam) — Bilingual assistant for Vipassana meditation courses at Dhamma Virocana (Hà Nội) and Dhamma Vutthi (TP. HCM)." />
+  <title>Vipassana Chatbot</title>
+  <meta name="description" content="Trợ lý song ngữ về thiền Vipassana (Việt Nam) — Bilingual assistant for Vipassana meditation courses at Dhamma Virocana (Hà Nội) and Dhamma Vutthi (TP. HCM)." />
   <meta name="robots" content="index, follow" />
   <meta name="theme-color" content="#0f172a" />
   <!-- Open Graph / Social -->
   <meta property="og:type" content="website" />
-  <meta property="og:title" content="Vipassana UCENLIST Chatbot" />
-  <meta property="og:description" content="Hỏi đáp về khóa thiền Vipassana, lịch khai giảng, và nội quy giới luật tại UCENLIST Việt Nam. / Ask about Vipassana courses, schedules, and Code of Discipline at UCENLIST Vietnam." />
+  <meta property="og:title" content="Vipassana Chatbot" />
+  <meta property="og:description" content="Hỏi đáp về khóa thiền Vipassana, lịch khai giảng, và nội quy giới luật tại Việt Nam. / Ask about Vipassana courses, schedules, and Code of Discipline in Vietnam." />
   <!-- Favicon: lotus SVG data URI (no extra file needed) -->
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧘</text></svg>" />
   <style>
@@ -189,9 +189,19 @@
     aside.sidebar a { color: var(--accent); text-decoration: none; }
     aside.sidebar a:hover { text-decoration: underline; }
     aside.sidebar .official { margin-top: 6px; }
+    aside.sidebar .sidebar-disclaimer {
+      margin-top: 16px;
+      padding: 10px 12px;
+      background: var(--bg);
+      border: 1px solid var(--bg-3);
+      border-radius: 8px;
+      font-size: 12px;
+      line-height: 1.45;
+      color: var(--text-dim);
+    }
     aside.sidebar .sidebar-contact {
-      margin-top: 20px;
-      padding-top: 14px;
+      margin-top: 14px;
+      padding-top: 12px;
       border-top: 1px solid var(--bg-3);
       font-size: 12px;
       color: var(--text-dim);
@@ -256,8 +266,8 @@
 <body>
   <header>
     <div>
-      <h1>🧘 Vipassana UCENLIST Chatbot</h1>
-      <div class="subtitle" data-i18n="subtitle">Trợ lý song ngữ về thiền Vipassana tại UCENLIST (Việt Nam)</div>
+      <h1>🧘 Vipassana Chatbot</h1>
+      <div class="subtitle" data-i18n="subtitle">Trợ lý song ngữ về thiền Vipassana (Việt Nam)</div>
     </div>
     <div class="controls">
       <div class="lang-toggle" role="group" aria-label="Language">
@@ -285,6 +295,7 @@
           <div class="official"><a href="https://vutthi.vridhamma.org/vi" target="_blank" rel="noopener noreferrer">vutthi.vridhamma.org</a> · <a href="https://schedule.vridhamma.org/vi/courses/vutthi" target="_blank" rel="noopener noreferrer" data-i18n="schedule">Lịch khóa thiền</a></div>
         </div>
       </div>
+      <div class="sidebar-disclaimer" data-i18n="disclaimer">💡 Đây không phải là chatbot chính thức của Trung tâm Ucenlist, mà chỉ là một dự án cá nhân giúp mọi người tìm hiểu về thiền Vipassana. Thông tin và lịch các khóa thiền được tổng hợp từ 2 trang web gốc ở trên.</div>
       <div class="sidebar-contact" data-i18n="contactEmail">Góp ý chatbot: explorerkr@gmail.com</div>
     </aside>
 
@@ -309,30 +320,32 @@
 
       const I18N = {
         vi: {
-          subtitle: "Trợ lý song ngữ về thiền Vipassana tại UCENLIST (Việt Nam)",
+          subtitle: "Trợ lý song ngữ về thiền Vipassana (Việt Nam)",
           clear: "Xóa lịch sử",
           send: "Gửi",
           placeholder: "Hỏi về khóa thiền, lịch các khóa thiền, hoặc nội quy giới luật...",
           centersTitle: "Trung tâm &amp; Liên kết chính thức",
           schedule: "Lịch khóa thiền",
+          disclaimer: "💡 Đây không phải là chatbot chính thức của Trung tâm Ucenlist, mà chỉ là một dự án cá nhân giúp mọi người tìm hiểu về thiền Vipassana. Thông tin và lịch các khóa thiền được tổng hợp từ 2 trang web gốc ở trên.",
           contactEmail: "Góp ý chatbot: explorerkr@gmail.com",
           thinking: "Đang suy nghĩ",
           error: "Xin lỗi, đã có lỗi xảy ra khi xử lý yêu cầu của bạn. Vui lòng thử lại sau.",
-          welcome: "Chào bạn! Tôi là trợ lý về khóa thiền Vipassana của UCENLIST. Hãy hỏi tôi về Vipassana, thiền sư S.N. Goenka, nội quy giới luật, thời khóa biểu, hoặc lịch các khóa thiền sắp tới tại Hà Nội và TP. Hồ Chí Minh.",
-          welcomeMobile: "Chào bạn! Tôi là trợ lý về khóa thiền Vipassana của UCENLIST. Hãy hỏi tôi về Vipassana, thiền sư S.N. Goenka, nội quy giới luật, thời khóa biểu, hoặc lịch các khóa thiền sắp tới tại Hà Nội và TP. Hồ Chí Minh.\n\n**Dhamma Virocana** (Hà Nội)\nSố 15-17 ngõ Sala, đường Đồng Đò, thôn Minh Tân, xã Kim Anh, Hà Nội\n+84 966 894 936 · contact.virocana@vridhamma.org\n[virocana.vridhamma.org](https://virocana.vridhamma.org/vi) · [Lịch khóa thiền](https://schedule.vridhamma.org/vi/courses/virocana)\n\n**Dhamma Vutthi** (TP. Hồ Chí Minh)\n112, đường 628, ấp Trại Đèn, Phước Hiệp, Củ Chi, TP. Hồ Chí Minh\n+84 942 255 050 · contact.vutthi@vridhamma.org\n[vutthi.vridhamma.org](https://vutthi.vridhamma.org/vi) · [Lịch khóa thiền](https://schedule.vridhamma.org/vi/courses/vutthi)",
+          welcome: "Chào bạn! Tôi là trợ lý hỗ trợ tìm hiểu thông tin về các khóa thiền Vipassana. Hãy hỏi tôi về Vipassana, thiền sư S.N. Goenka, nội quy giới luật, thời khóa biểu, hoặc lịch các khóa thiền sắp tới tại Hà Nội và TP. Hồ Chí Minh.",
+          welcomeMobile: "Chào bạn! Tôi là trợ lý hỗ trợ tìm hiểu thông tin về các khóa thiền Vipassana. Hãy hỏi tôi về Vipassana, thiền sư S.N. Goenka, nội quy giới luật, thời khóa biểu, hoặc lịch các khóa thiền sắp tới tại Hà Nội và TP. Hồ Chí Minh.\n\n**Dhamma Virocana** (Hà Nội)\nSố 15-17 ngõ Sala, đường Đồng Đò, thôn Minh Tân, xã Kim Anh, Hà Nội\n+84 966 894 936 · contact.virocana@vridhamma.org\n[virocana.vridhamma.org](https://virocana.vridhamma.org/vi) · [Lịch khóa thiền](https://schedule.vridhamma.org/vi/courses/virocana)\n\n**Dhamma Vutthi** (TP. Hồ Chí Minh)\n112, đường 628, ấp Trại Đèn, Phước Hiệp, Củ Chi, TP. Hồ Chí Minh\n+84 942 255 050 · contact.vutthi@vridhamma.org\n[vutthi.vridhamma.org](https://vutthi.vridhamma.org/vi) · [Lịch khóa thiền](https://schedule.vridhamma.org/vi/courses/vutthi)",
         },
         en: {
-          subtitle: "Bilingual assistant about Vipassana meditation at UCENLIST (Vietnam)",
+          subtitle: "Bilingual assistant about Vipassana meditation (Vietnam)",
           clear: "Clear chat",
           send: "Send",
           placeholder: "Ask about courses, schedules, or the Code of Discipline...",
           centersTitle: "Centers &amp; Official Links",
           schedule: "Course schedule",
+          disclaimer: "💡 This is not an official chatbot of the UCENLIST Center, but a personal project helping people learn about Vipassana meditation. Information and course schedules are aggregated from the 2 official websites listed above.",
           contactEmail: "Feedback on the chatbot: explorerkr@gmail.com",
           thinking: "Thinking",
           error: "Sorry, something went wrong while processing your request. Please try again later.",
-          welcome: "Hello! I am the Vipassana course assistant for UCENLIST. Ask me about Vipassana, Mr. S.N. Goenka, the Code of Discipline, the daily timetable, or upcoming course schedules in Hanoi and Ho Chi Minh City.",
-          welcomeMobile: "Hello! I am the Vipassana course assistant for UCENLIST. Ask me about Vipassana, Mr. S.N. Goenka, the Code of Discipline, the daily timetable, or upcoming course schedules in Hanoi and Ho Chi Minh City.\n\n**Dhamma Virocana** (Hanoi)\nSố 15-17 ngõ Sala, đường Đồng Đò, thôn Minh Tân, xã Kim Anh, Hà Nội\n+84 966 894 936 · contact.virocana@vridhamma.org\n[virocana.vridhamma.org](https://virocana.vridhamma.org/vi) · [Course schedule](https://schedule.vridhamma.org/vi/courses/virocana)\n\n**Dhamma Vutthi** (Ho Chi Minh City)\n112, đường 628, ấp Trại Đèn, Phước Hiệp, Củ Chi, TP. Hồ Chí Minh\n+84 942 255 050 · contact.vutthi@vridhamma.org\n[vutthi.vridhamma.org](https://vutthi.vridhamma.org/vi) · [Course schedule](https://schedule.vridhamma.org/vi/courses/vutthi)",
+          welcome: "Hello! I am an assistant helping you explore information about Vipassana meditation courses. Ask me about Vipassana, Mr. S.N. Goenka, the Code of Discipline, the daily timetable, or upcoming course schedules in Hanoi and Ho Chi Minh City.",
+          welcomeMobile: "Hello! I am an assistant helping you explore information about Vipassana meditation courses. Ask me about Vipassana, Mr. S.N. Goenka, the Code of Discipline, the daily timetable, or upcoming course schedules in Hanoi and Ho Chi Minh City.\n\n**Dhamma Virocana** (Hanoi)\nSố 15-17 ngõ Sala, đường Đồng Đò, thôn Minh Tân, xã Kim Anh, Hà Nội\n+84 966 894 936 · contact.virocana@vridhamma.org\n[virocana.vridhamma.org](https://virocana.vridhamma.org/vi) · [Course schedule](https://schedule.vridhamma.org/vi/courses/virocana)\n\n**Dhamma Vutthi** (Ho Chi Minh City)\n112, đường 628, ấp Trại Đèn, Phước Hiệp, Củ Chi, TP. Hồ Chí Minh\n+84 942 255 050 · contact.vutthi@vridhamma.org\n[vutthi.vridhamma.org](https://vutthi.vridhamma.org/vi) · [Course schedule](https://schedule.vridhamma.org/vi/courses/vutthi)",
         },
       };
 
