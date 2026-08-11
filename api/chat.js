@@ -35,6 +35,82 @@ const LLM_TIMEOUT_MS = 100000;
 const FIRST_TOKEN_TIMEOUT_MS = 50000;
 const TOOL_RESULT_ECHO_MAX = 8192;
 
+// ─── CORS ────────────────────────────────────────────────────────────────────
+
+// Requests from the same deployment (null origin from file://, or the Vercel
+// domain) are always permitted. Origins not on this list receive a 403.
+// Adjust ALLOWED_ORIGINS to match your production domain(s).
+const ALLOWED_ORIGINS = [
+  // Allow same-origin (browser omits Origin on same-origin requests in some
+  // cases, so we also allow absent Origin in addCorsHeaders below).
+  // Pattern-match: any *.vercel.app subdomain + any custom domains you add.
+];
+
+const VERCEL_ORIGIN_RE = /^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)*\.vercel\.app$/i;
+
+function isAllowedOrigin(origin) {
+  if (!origin) return true; // same-origin (no Origin header) or server-to-server
+  if (VERCEL_ORIGIN_RE.test(origin)) return true;
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  // Allow localhost in development
+  if (/^https?:\/\/localhost(:\d+)?$/.test(origin)) return true;
+  return false;
+}
+
+function addCorsHeaders(headers, origin) {
+  const allowedOrigin = isAllowedOrigin(origin) ? (origin || "*") : null;
+  if (allowedOrigin) {
+    headers["Access-Control-Allow-Origin"] = allowedOrigin;
+    headers["Access-Control-Allow-Methods"] = "POST, OPTIONS";
+    headers["Access-Control-Allow-Headers"] = "Content-Type, Accept";
+    headers["Vary"] = "Origin";
+  }
+  return headers;
+}
+
+// ─── Rate limiting ────────────────────────────────────────────────────────────
+
+// Simple in-process sliding-window rate limiter. Resets on cold start.
+// Vercel may run multiple warm instances, so this is a per-instance guard
+// rather than a global quota, but it still stops single-client floods.
+const RATE_LIMIT_MAX = 20; // requests per window
+const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
+
+const _rateLimitStore = new Map(); // ip → [timestamp, ...]
+
+function checkRateLimit(ip) {
+  // Only rate-limit when a real client IP is identifiable. In Vercel production
+  // `x-forwarded-for` is always injected by the edge; "unknown" means the
+  // request arrived without any proxy header (local dev, internal calls, tests).
+  if (!ip || ip === "unknown") return false;
+  const now = Date.now();
+  const cutoff = now - RATE_LIMIT_WINDOW_MS;
+  const timestamps = (_rateLimitStore.get(ip) || []).filter((t) => t > cutoff);
+  if (timestamps.length >= RATE_LIMIT_MAX) {
+    _rateLimitStore.set(ip, timestamps);
+    return true; // rate-limited
+  }
+  timestamps.push(now);
+  _rateLimitStore.set(ip, timestamps);
+  // Evict very old entries to prevent unbounded growth
+  if (_rateLimitStore.size > 5000) {
+    const oldCutoff = now - RATE_LIMIT_WINDOW_MS * 2;
+    for (const [k, ts] of _rateLimitStore) {
+      if (ts[ts.length - 1] < oldCutoff) _rateLimitStore.delete(k);
+    }
+  }
+  return false;
+}
+
+// ─── API key missing: log only once per cold start ───────────────────────────
+let _apiKeyMissingLogged = false;
+function warnApiKeyMissing() {
+  if (!_apiKeyMissingLogged) {
+    _apiKeyMissingLogged = true;
+    console.error("OPENCODE_API_KEY is not set — all requests will return an error.");
+  }
+}
+
 const LLM_CHAT_URL = "https://opencode.ai/zen/v1/chat/completions";
 // Single model id used for the classifier, the knowledge fast path, the tool
 // loop, and every retry. `AGENT_MODEL` wins if set; `FAST_MODEL` is the
@@ -138,34 +214,76 @@ export const config = {
 };
 
 export async function POST(request) {
+  const origin = request.headers.get("origin");
+  const corsHeaders = addCorsHeaders({}, origin);
+
+  // Handle CORS preflight
+  if (request.method === "OPTIONS") {
+    if (!isAllowedOrigin(origin)) {
+      return new Response(null, { status: 403 });
+    }
+    return new Response(null, { status: 204, headers: corsHeaders });
+  }
+
   if (request.method !== "POST") {
-    return Response.json({ error: "Method not allowed" }, { status: 405 });
+    return Response.json({ error: "Method not allowed" }, { status: 405, headers: corsHeaders });
+  }
+
+  // CORS origin check
+  if (!isAllowedOrigin(origin)) {
+    return Response.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  // Rate limiting
+  const ip =
+    request.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
+    request.headers.get("x-real-ip") ||
+    "unknown";
+  if (checkRateLimit(ip)) {
+    return Response.json(
+      { error: "Too many requests. Please wait a moment before sending another message." },
+      { status: 429, headers: { ...corsHeaders, "Retry-After": "60" } }
+    );
   }
 
   const contentLength = request.headers.get("content-length");
   if (contentLength && Number(contentLength) > 1024 * 1024) {
-    return Response.json({ error: "Request body too large" }, { status: 413 });
+    return Response.json({ error: "Request body too large" }, { status: 413, headers: corsHeaders });
   }
 
   let body;
   try {
     body = await request.json();
   } catch {
-    return Response.json({ error: "Invalid JSON body" }, { status: 400 });
+    return Response.json({ error: "Invalid JSON body" }, { status: 400, headers: corsHeaders });
   }
 
   const messages = body && body.messages;
   if (!Array.isArray(messages) || messages.length === 0) {
-    return Response.json({ error: "messages must be a non-empty array" }, { status: 400 });
+    return Response.json({ error: "messages must be a non-empty array" }, { status: 400, headers: corsHeaders });
   }
   if (messages.length > MAX_REQUEST_MESSAGES) {
     return Response.json(
       { error: `Too many messages (max ${MAX_REQUEST_MESSAGES})` },
-      { status: 413 }
+      { status: 413, headers: corsHeaders }
     );
   }
-  if (messages.some((m) => typeof m.content !== "string" || m.content.length > MAX_MESSAGE_LENGTH)) {
-    return Response.json({ error: "Invalid or oversized message content" }, { status: 400 });
+
+  // Strict role + content validation. Reject any role that is not user or
+  // assistant — an invalid role could craft a misleading turn sequence.
+  const VALID_ROLES = new Set(["user", "assistant"]);
+  if (
+    messages.some(
+      (m) =>
+        !VALID_ROLES.has(m.role) ||
+        typeof m.content !== "string" ||
+        m.content.length > MAX_MESSAGE_LENGTH
+    )
+  ) {
+    return Response.json(
+      { error: "Invalid message: role must be 'user' or 'assistant', content must be a string within size limits" },
+      { status: 400, headers: corsHeaders }
+    );
   }
 
   const trimmed = messages.slice(-MAX_MESSAGES).map((m) => ({
@@ -182,6 +300,7 @@ export async function POST(request) {
     return new Response(generateAgentStream(trimmed), {
       status: 200,
       headers: {
+        ...corsHeaders,
         "Content-Type": "text/event-stream; charset=utf-8",
         "Cache-Control": "no-cache",
         Connection: "keep-alive",
@@ -191,7 +310,7 @@ export async function POST(request) {
   }
 
   const text = await generateAgentResponse(trimmed);
-  return Response.json({ text });
+  return Response.json({ text }, { headers: corsHeaders });
 }
 
 /**
@@ -206,7 +325,7 @@ export async function POST(request) {
 async function generateAgentResponse(messages) {
   const apiKey = process.env.OPENCODE_API_KEY;
   if (!apiKey) {
-    console.error("OPENCODE_API_KEY is not set");
+    warnApiKeyMissing();
     return sanitize_urls(ERROR_RESPONSE_TEXT);
   }
   const modelId = resolveModel();
@@ -355,7 +474,7 @@ async function runStream(sse, messages) {
   try {
     const apiKey = process.env.OPENCODE_API_KEY;
     if (!apiKey) {
-      console.error("OPENCODE_API_KEY is not set");
+      warnApiKeyMissing();
       sse.done(sanitize_urls(ERROR_RESPONSE_TEXT));
       return;
     }

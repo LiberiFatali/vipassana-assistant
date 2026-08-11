@@ -36,34 +36,32 @@ function linkify(url, text) {
   return LINK_REMOVED_NOTICE;
 }
 
-// Placeholders protect already-rendered markdown links from the later
-// bare-URL pass (which would otherwise match the URL inside href="...").
-const linkPlaceholders = [];
-
-function protectLinks(s) {
-  linkPlaceholders.length = 0;
+// protectLinks/restoreLinks are pure: they take an explicit placeholders array
+// so each inline() call is independent (no shared module-level mutable state).
+function protectLinks(s, placeholders) {
   return s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, text, url) => {
-    linkPlaceholders.push(linkify(url, text));
-    return `\u0000L${linkPlaceholders.length - 1}\u0000`;
+    placeholders.push(linkify(url, text));
+    return `\u0000L${placeholders.length - 1}\u0000`;
   });
 }
 
-function restoreLinks(s) {
-  return s.replace(/\u0000L(\d+)\u0000/g, (m, i) => linkPlaceholders[Number(i)]);
+function restoreLinks(s, placeholders) {
+  return s.replace(/\u0000L(\d+)\u0000/g, (m, i) => placeholders[Number(i)]);
 }
 
 function inline(s) {
   // Escape FIRST: raw markdown text becomes inert HTML before any tag we emit.
+  const placeholders = []; // per-call — never shared
   let out = esc(s);
   out = out.replace(/`([^`]+)`/g, "<code>$1</code>");
   out = out.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   out = out.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
-  out = protectLinks(out);
+  out = protectLinks(out, placeholders);
   out = out.replace(
     /(https?:\/\/[^\s<)"']+)/g,
     (url) => linkify(url, url)
   );
-  out = restoreLinks(out);
+  out = restoreLinks(out, placeholders);
   out = out.replace(/\[🔒 Link removed[^\]]*\]/g, (m) => `<span class="link-removed">${m}</span>`);
   return out;
 }
