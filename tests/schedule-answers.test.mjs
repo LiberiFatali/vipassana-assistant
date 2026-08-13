@@ -68,8 +68,6 @@ const FIXTURE = [
   },
 ];
 
-const emptyList = async () => [];
-
 // ─── Intent detection ─────────────────────────────────────────────────────────
 
 test("end-of-month Hanoi question detects center + end_month window", () => {

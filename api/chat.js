@@ -2,10 +2,10 @@
  * POST /api/chat — the single agent endpoint.
  *
  * Stateless: the client supplies the full message history; the server prepends
- * the system prompt (base template + injected SKILL.md), runs a manual tool
- * loop against the LLM provider chain in lib/llm.js (Gemini primary, OpenCode
- * Zen fallback; up to 5 steps), sanitizes the final text with sanitize_urls(),
- * and returns { text }.
+ * the system prompt (base template + injected SKILL.md), classifies the intent
+ * (knowledge-only fast path vs live-data composer via lib/llm.js — Gemini
+ * primary, OpenCode Zen fallback), sanitizes the final text with
+ * sanitize_urls(), and returns { text }.
  *
  * Direct fetch on purpose: the Zen endpoint is plain OpenAI-compatible and the
  * previous AI SDK layer (ai + @ai-sdk/openai-compatible) added ~12MB of deps
@@ -24,20 +24,15 @@ import { getQuickAnswer } from "../lib/quick-answers.js";
 import { getOutOfScopeAnswer } from "../lib/out-of-scope.js";
 import { buildLiveScheduleContext, getScheduleAnswer } from "../lib/schedule-answers.js";
 import { answerCache } from "../lib/answer-cache.js";
-import { getCenterInfo, getCenterInfoInputSchema } from "../lib/tools/get-center-info.js";
-import { getCourseDetails, getCourseDetailsInputSchema } from "../lib/tools/get-course-details.js";
-import { listCourses, listCoursesInputSchema } from "../lib/tools/list-courses.js";
 
 const MAX_MESSAGES = 20;
 const MAX_REQUEST_MESSAGES = 100;
 const MAX_MESSAGE_LENGTH = 20000;
-const MAX_TOOL_STEPS = 5;
 // Total wall-clock budget for every LLM call (primary attempt + backoff +
 // fallback). Matches Vercel's `maxDuration: 60` so a request can never outlive
 // its function budget. Provider selection, keys, and model resolution live in
 // lib/llm.js (Gemini primary, OpenCode Zen fallback by default).
 const LLM_TIMEOUT_MS = 60000;
-const TOOL_RESULT_ECHO_MAX = 8192;
 
 // ─── CORS ────────────────────────────────────────────────────────────────────
 
@@ -123,81 +118,6 @@ const TIMEOUT_RESPONSE_TEXT =
 function isTimeoutError(err) {
   return Boolean(err) && (err.name === "AbortError" || err.name === "TimeoutError");
 }
-
-/**
- * Tool registry: plain OpenAI function schemas plus the zod parse/execute
- * functions (zod keeps the input coercion/defaults from the tool modules).
- */
-const TOOLS = [
-  {
-    name: "list_courses",
-    description:
-      "Returns upcoming Vipassana meditation courses at UCENLIST centers (Dhamma Virocana / Hà Nội and Dhamma Vutthi / TP. HCM). Use for course schedules, dates, open/full status, and registration links.",
-    parameters: {
-      type: "object",
-      properties: {
-        center: {
-          type: "string",
-          enum: ["virocana", "vutthi", "all"],
-          default: "all",
-          description:
-            "Which center to query: 'virocana' (Ha Noi / Hà Nội), 'vutthi' (Ho Chi Minh City / TP. HCM), or 'all' for both.",
-        },
-        language: {
-          type: "string",
-          enum: ["vi", "en"],
-          default: "vi",
-          description: "Language for schedule page: 'vi' for Vietnamese, 'en' for English.",
-        },
-        course_type: {
-          type: "string",
-          description:
-            "Optional filter by course type, e.g. '10-day', 'short', 'satipatthana'. Leave empty for all types.",
-        },
-      },
-      additionalProperties: false,
-    },
-    parse: listCoursesInputSchema.parse,
-    execute: listCourses,
-  },
-  {
-    name: "get_course_details",
-    description:
-      "Fetches supplementary information (eligibility, comments, registration notes, special instructions) for a specific course from its VRI apply_url. Use the apply_url returned by list_courses.",
-    parameters: {
-      type: "object",
-      properties: {
-        apply_url: {
-          type: "string",
-          description: "The apply_url from a list_courses result. Must be a schedule.vridhamma.org URL.",
-        },
-      },
-      required: ["apply_url"],
-      additionalProperties: false,
-    },
-    parse: getCourseDetailsInputSchema.parse,
-    execute: getCourseDetails,
-  },
-  {
-    name: "get_center_info",
-    description:
-      "Returns static contact and location information (address, phone, email, website, schedule links) for a UCENLIST meditation center.",
-    parameters: {
-      type: "object",
-      properties: {
-        center: {
-          type: "string",
-          description:
-            "Which center to get info for: 'virocana' = Dhamma Virocana in Ha Noi (Hà Nội), 'vutthi' = Dhamma Vutthi in Ho Chi Minh City (TP. Hồ Chí Minh).",
-        },
-      },
-      required: ["center"],
-      additionalProperties: false,
-    },
-    parse: getCenterInfoInputSchema.parse,
-    execute: getCenterInfo,
-  },
-];
 
 export const config = {
   maxDuration: 60,
@@ -376,19 +296,6 @@ async function generateAgentResponse(messages) {
     console.error("LLM composer call failed:", err);
     return sanitize_urls(isTimeoutError(err) ? TIMEOUT_RESPONSE_TEXT : ERROR_RESPONSE_TEXT);
   }
-}
-
-/**
- * Bound the size of a tool result echoed back into the conversation. The full
- * result is what the tool returned; only the echo into `apiMessages` is
- * truncated so an oversized `list_courses` payload cannot balloon the next
- * prompt. A marker tells the model the data is incomplete.
- */
-function truncateToolResult(result) {
-  if (typeof result !== "string" || result.length <= TOOL_RESULT_ECHO_MAX) {
-    return result;
-  }
-  return result.slice(0, TOOL_RESULT_ECHO_MAX) + "\n…[truncated]";
 }
 
 /**

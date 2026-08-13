@@ -24,7 +24,7 @@ import { KNOWLEDGE_SYSTEM_PROMPT } from "../lib/system-prompt.js";
 import { loadKnowledgeBase } from "../lib/knowledge.js";
 import { CENTERS } from "../lib/centers.js";
 
-const URL_RE = /https?:\/\/[^\s\)\]"']+/g;
+const URL_RE = /https?:\/\/[^\s)"']+/g;
 const FALLBACK_JSON_PATH = fileURLToPath(
   new URL("../lib/fallback-schedule.json", import.meta.url)
 );

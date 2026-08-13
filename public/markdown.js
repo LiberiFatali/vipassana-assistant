@@ -46,7 +46,8 @@ function protectLinks(s, placeholders) {
 }
 
 function restoreLinks(s, placeholders) {
-  return s.replace(/\u0000L(\d+)\u0000/g, (m, i) => placeholders[Number(i)]);
+  // \u0000 is an intentional placeholder sentinel (never present in text).
+  return s.replace(/\u0000L(\d+)\u0000/g, (m, i) => placeholders[Number(i)]); // eslint-disable-line no-control-regex
 }
 
 function inline(s) {
