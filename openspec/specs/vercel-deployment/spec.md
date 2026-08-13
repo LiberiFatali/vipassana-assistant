@@ -15,15 +15,23 @@ The chatbot SHALL be deployed as a Vercel project consisting of Node.js serverle
 - **THEN** every push to the production branch deploys the app with the same structure and environment variables.
 
 ### Requirement: OpenCode Zen LLM Access
-The chatbot SHALL obtain LLM completions through OpenCode Zen (OpenAI-compatible endpoint at `https://opencode.ai/zen/v1`) authenticated by the `OPENCODE_API_KEY` environment variable, using a free model by default (`deepseek-v4-flash-free`), and SHALL NOT require a provider API key (e.g. Gemini).
+The chatbot SHALL obtain LLM completions through an OpenAI-compatible endpoint provided by a primary LLM provider that defaults to Google Gemini (endpoint `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions`) authenticated by the `GEMINI_API_KEY` environment variable, using the free `gemini-3.1-flash-lite-preview` model by default, and SHALL fall back to OpenCode Zen (endpoint `https://opencode.ai/zen/v1`) authenticated by `OPENCODE_API_KEY` when Gemini fails. At least one provider API key SHALL be configured.
 
-#### Scenario: Chat request routes through OpenCode Zen
-- **WHEN** a user sends a message to the chatbot and `OPENCODE_API_KEY` is set
-- **THEN** the agent sends the request to OpenCode Zen with the configured model and returns the completion.
+#### Scenario: Chat request routes through Gemini
+- **WHEN** a user sends a message to the chatbot and `GEMINI_API_KEY` is set
+- **THEN** the agent sends the request to Google Gemini's OpenAI-compatible endpoint with the configured model and returns the completion.
+
+#### Scenario: Gemini fails and Zen fallback is used
+- **WHEN** a user sends a message, `GEMINI_API_KEY` is set but Gemini returns an error, and `OPENCODE_API_KEY` is set
+- **THEN** the agent sends the request to OpenCode Zen and returns its completion.
+
+#### Scenario: Provider is configurable
+- **WHEN** `LLM_PROVIDER` is set to `zen` in the environment
+- **THEN** OpenCode Zen is used as the primary provider.
 
 #### Scenario: Model is configurable
 - **WHEN** `AGENT_MODEL` is set in the environment
-- **THEN** the agent uses that model id; when unset it defaults to `deepseek-v4-flash-free`.
+- **THEN** the agent uses that model id; when unset it defaults to the active provider's default model (`gemini-3.1-flash-lite-preview` for Gemini, `deepseek-v4-flash-free` for OpenCode Zen).
 
 ### Requirement: Stateless Chat API Endpoint
 The system SHALL expose a single stateless `POST /api/chat` endpoint that accepts the full message history from the client, applies the agent (system prompt + knowledge base + tools), and returns the sanitized response text.

@@ -78,6 +78,18 @@ vercel deploy --prod
 
 Or import the repository into Vercel from GitHub — every push to the production branch deploys.
 
+### Automated deploys via GitHub Actions
+
+`.github/workflows/deploy.yml` runs tests then deploys with the official Vercel CLI:
+
+- **push to `main`** → production deploy (`vercel deploy --prod`)
+- **pull request** → preview deploy, with the preview URL posted as a PR comment
+
+Requires one GitHub secret (repo → Settings → Secrets and variables → Actions):
+`VERCEL_TOKEN` — a Vercel access token (create in Vercel → Account Settings → Tokens).
+
+The workflow relies on `.vercel/project.json` (project link) being committed — do not delete it. Runtime env vars (`GEMINI_API_KEY`, etc.) stay configured in the Vercel project dashboard and are applied to CI deployments automatically.
+
 ## Architecture
 
 ```

@@ -63,7 +63,8 @@ active_env/
 
 # Node.js
 node_modules/
-.vercel/
+.vercel/*
+!.vercel/project.json
 
 # Local environment variables / secrets
 .env
