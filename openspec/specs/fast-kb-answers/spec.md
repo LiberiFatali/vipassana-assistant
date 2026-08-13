@@ -66,17 +66,6 @@ The system SHALL cache generated LLM fast-path answers in memory keyed by `lang|
 - **WHEN** the user asks the same knowledge question twice on the same instance
 - **THEN** the second response is served from the in-memory cache without an additional LLM call
 
-### Requirement: Configurable faster model for the knowledge fast path
-The system SHALL use a configurable `FAST_MODEL` for the knowledge fast path, separate from the model used by the tool path and classifier, and SHALL fall back to the standard model if the fast model request fails.
-
-#### Scenario: Fast model used on the knowledge path
-- **WHEN** `FAST_MODEL` is set and a request routes to the knowledge path
-- **THEN** the fast-path LLM call uses the `FAST_MODEL` model id
-
-#### Scenario: Fallback on fast-model failure
-- **WHEN** the fast-path LLM call using `FAST_MODEL` fails
-- **THEN** the system retries once with the standard model before returning an error response
-
 ### Requirement: Safety invariants preserved
 All fast answer paths SHALL preserve the existing safety model: the knowledge fast path MUST NOT attach tools, every response text (deterministic, cached, or LLM) MUST pass through `sanitize_urls()`, and the tool path MUST continue to inject the full knowledge base.
 

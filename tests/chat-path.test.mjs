@@ -8,8 +8,6 @@
  *  - live-schedule questions take the tool path: `tools` attached, full
  *    knowledge base injected;
  *  - ambiguous questions flow through the LLM classifier;
- *  - Gemini failure falls through to the OpenCode Zen fallback;
- *  - Zen-only mode routes everything to Zen;
  *  - no provider key → static bilingual error without any LLM call.
  *
  * Run: node --test tests/chat-path.test.mjs
@@ -24,7 +22,6 @@ const ORIGINAL_FETCH = globalThis.fetch;
 const requests = [];
 
 const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
-const ZEN_URL = "https://opencode.ai/zen/v1/chat/completions";
 
 const FAKE_RESPONSE = {
   ok: true,
@@ -52,9 +49,7 @@ let stubStatusFor = () => null;
 
 before(() => {
   process.env.GEMINI_API_KEY = "test-gemini-key";
-  process.env.OPENCODE_API_KEY = "test-zen-key";
   process.env.AGENT_MODEL = "test-model";
-  process.env.FAST_MODEL = "test-fast-model";
   answerCache.clear();
   globalThis.fetch = async (url, opts) => {
     requests.push({ url: String(url), body: JSON.parse(opts.body) });
@@ -66,9 +61,7 @@ before(() => {
 after(() => {
   globalThis.fetch = ORIGINAL_FETCH;
   delete process.env.GEMINI_API_KEY;
-  delete process.env.OPENCODE_API_KEY;
   delete process.env.AGENT_MODEL;
-  delete process.env.FAST_MODEL;
 });
 
 async function withEnv(env, fn) {
@@ -189,7 +182,7 @@ test("repeated generative question is served from the answer cache", async () =>
   assert.equal(requests.length, 0, "second ask is served from cache");
 });
 
-test("fallback: Gemini 500 falls through to OpenCode Zen", async () => {
+test("fallback: Gemini failure returns the static bilingual error without a fallback provider", async () => {
   answerCache.clear();
   requests.length = 0;
   stubStatusFor = (url) => (url.includes("generativelanguage") ? 500 : null);
@@ -199,34 +192,18 @@ test("fallback: Gemini 500 falls through to OpenCode Zen", async () => {
     ]);
     const data = await res.json();
 
-    assert.equal(data.text, "A curated answer.");
-    assert.equal(requests.length, 2, "Gemini attempt then Zen fallback");
-    assert.ok(requests[0].url.includes(GEMINI_URL), "first request is Gemini");
-    assert.ok(requests[1].url.includes(ZEN_URL), "fallback request is Zen");
+    assert.ok(data.text.includes("Xin lỗi"), "bilingual error text returned");
+    assert.equal(requests.length, 2, "one fast-path attempt plus its once-retry, no fallback provider");
+    assert.ok(requests.every((r) => r.url.includes(GEMINI_URL)), "all requests hit Gemini only");
   } finally {
     stubStatusFor = () => null;
   }
 });
 
-test("zen-only mode: OPENCODE_API_KEY alone routes requests to Zen", async () => {
-  answerCache.clear();
-  requests.length = 0;
-  await withEnv({ GEMINI_API_KEY: undefined }, async () => {
-    const res = await post([
-      { role: "user", content: "What is the daily timetable during a 10-day course?" },
-    ]);
-    const data = await res.json();
-
-    assert.equal(data.text, "A curated answer.");
-    assert.equal(requests.length, 1, "single LLM call on the fast path");
-    assert.ok(requests[0].url.includes(ZEN_URL), "request routes to Zen");
-  });
-});
-
 test("no provider keys: request returns the static bilingual error without LLM calls", async () => {
   answerCache.clear();
   requests.length = 0;
-  await withEnv({ GEMINI_API_KEY: undefined, OPENCODE_API_KEY: undefined }, async () => {
+  await withEnv({ GEMINI_API_KEY: undefined }, async () => {
     const res = await post([{ role: "user", content: "What is Vipassana?" }]);
     const data = await res.json();
 

@@ -1,9 +1,11 @@
-# llm-provider-abstraction Specification
+## REMOVED Requirements
 
-## Purpose
-OpenAI-compatible LLM access through a provider registry (currently a single Gemini provider), with 429-aware retry, bounded attempt budget, and configurable model selection.
+### Requirement: Multi-provider LLM access
+**Reason**: OpenCode Zen fallback removed; the system standardizes on Google Gemini as the single provider.
+**Migration**: The provider registry (`PROVIDERS`) retains a single `gemini` entry; provider selection and cross-provider fallback logic are removed.
 
-## Requirements
+## ADDED Requirements
+
 ### Requirement: Provider-based LLM access
 The system SHALL route LLM chat-completions through an OpenAI-compatible endpoint served by a provider registered in a provider registry. The registry SHALL contain a single provider by default: Google Gemini (endpoint `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions`, key `GEMINI_API_KEY`, default model `gemini-3.1-flash-lite-preview`). The system SHALL NOT fall back to a second provider.
 
@@ -14,6 +16,8 @@ The system SHALL route LLM chat-completions through an OpenAI-compatible endpoin
 #### Scenario: Gemini failure propagates
 - **WHEN** the provider returns an error (HTTP error, network failure, or timeout)
 - **THEN** the failure is propagated to the caller, which returns the static bilingual error response
+
+## MODIFIED Requirements
 
 ### Requirement: 429 rate-limit backoff
 The system SHALL retry a rate-limited (`429`) request with short exponential backoff, while keeping the total attempt time within the caller's timeout budget.

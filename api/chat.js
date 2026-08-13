@@ -3,15 +3,14 @@
  *
  * Stateless: the client supplies the full message history; the server prepends
  * the system prompt (base template + injected SKILL.md), classifies the intent
- * (knowledge-only fast path vs live-data composer via lib/llm.js — Gemini
- * primary, OpenCode Zen fallback), sanitizes the final text with
- * sanitize_urls(), and returns { text }.
+ * (knowledge-only fast path vs live-data composer via lib/llm.js — Gemini),
+ * sanitizes the final text with sanitize_urls(), and returns { text }.
  *
- * Direct fetch on purpose: the Zen endpoint is plain OpenAI-compatible and the
- * previous AI SDK layer (ai + @ai-sdk/openai-compatible) added ~12MB of deps
- * and an SDK-version churn bug in the auto tool loop. Standard non-streaming
- * response model where URL sanitization happens at a single trustworthy point
- * on the complete final text.
+ * Direct fetch on purpose: the Gemini endpoint is plain OpenAI-compatible and
+ * the previous AI SDK layer (ai + @ai-sdk/openai-compatible) added ~12MB of
+ * deps and an SDK-version churn bug in the auto tool loop. Standard
+ * non-streaming response model where URL sanitization happens at a single
+ * trustworthy point on the complete final text.
  */
 import { chatCompletion, hasProviderKey, warnApiKeyMissing } from "../lib/llm.js";
 import { KNOWLEDGE_SYSTEM_PROMPT } from "../lib/system-prompt.js";
@@ -28,10 +27,10 @@ import { answerCache } from "../lib/answer-cache.js";
 const MAX_MESSAGES = 20;
 const MAX_REQUEST_MESSAGES = 100;
 const MAX_MESSAGE_LENGTH = 20000;
-// Total wall-clock budget for every LLM call (primary attempt + backoff +
-// fallback). Matches Vercel's `maxDuration: 60` so a request can never outlive
-// its function budget. Provider selection, keys, and model resolution live in
-// lib/llm.js (Gemini primary, OpenCode Zen fallback by default).
+// Total wall-clock budget for every LLM call (attempt + backoff). Matches
+// Vercel's `maxDuration: 60` so a request can never outlive its function
+// budget. Provider selection, keys, and model resolution live in lib/llm.js
+// (single Gemini provider).
 const LLM_TIMEOUT_MS = 60000;
 
 // ─── CORS ────────────────────────────────────────────────────────────────────
@@ -206,7 +205,7 @@ export async function POST(request) {
 }
 
 /**
- * Run the tool loop against the OpenCode Zen chat-completions endpoint and
+ * Run the agent response path against the Gemini chat-completions endpoint and
  * return a sanitized final response. Never leaks provider keys or untrusted
  * URLs in error output.
  *
