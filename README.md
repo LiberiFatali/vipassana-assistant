@@ -54,3 +54,7 @@ PRs to `main` are welcome. For anything non-trivial, check `AGENTS.md` first —
 ## Security
 
 Two layers of domain gating: a system-prompt instruction that forbids untrusted URLs, plus a `sanitize_urls()` post-processor that strips anything not matching the trusted domains from every response.
+
+## License
+
+Licensed under the [GNU Affero General Public License v3.0](LICENSE) (or any later version). Any use or modification of this project must remain AGPL-3.0, preserve the attribution notice, and credit the original repository [vipassana-ucenlist-agent](https://github.com/LiberiFatali/vipassana-ucenlist-agent).

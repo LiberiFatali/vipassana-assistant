@@ -2,6 +2,7 @@
   "name": "vipassana-assistant",
   "version": "2.0.0",
   "private": true,
+  "license": "AGPL-3.0",
   "type": "module",
   "description": "Bilingual Vipassana meditation chatbot assistant deployed on Vercel.",
   "scripts": {
