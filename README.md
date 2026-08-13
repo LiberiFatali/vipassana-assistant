@@ -38,15 +38,18 @@ npm run lint  # ESLint
 
 On every pull request to `main` (and on pushes to `main`), GitHub Actions runs both — see `.github/workflows/ci.yml`.
 
-## Deploy
+## Deployment
 
-```bash
-vercel link
-vercel env add GEMINI_API_KEY
-vercel deploy --prod
-```
+Live at [vipassana-assistant.vercel.app](https://vipassana-assistant.vercel.app). PRs get a Vercel preview URL; merges to `main` deploy to production automatically — see [DEPLOYMENT.md](DEPLOYMENT.md).
 
-Or import the repository on Vercel and let it deploy from GitHub. Pushes to `main` deploy to production; pull requests get a preview URL (`.github/workflows/deploy.yml`). One secret is required: `VERCEL_TOKEN` (Vercel → Account Settings → Tokens).
+## Contributing
+
+PRs to `main` are welcome. For anything non-trivial, check `AGENTS.md` first — it covers the architecture, request flow, security model, and the spec-driven OpenSpec workflow.
+
+1. Branch, then `npm install`.
+2. Run locally with `npm run dev` (needs `GEMINI_API_KEY` in `.env`).
+3. Ensure `npm test` and `npm run lint` pass.
+4. Open a pull request to `main`. CI runs both on every PR; merging auto-deploys to production (see [DEPLOYMENT.md](DEPLOYMENT.md)).
 
 ## Security
 
