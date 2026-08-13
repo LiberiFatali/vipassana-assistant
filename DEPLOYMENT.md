@@ -7,7 +7,7 @@ The official deployment of this project lives at [vipassana-assistant.vercel.app
 There is nothing special to run — deployment is fully automated once your changes reach `main`:
 
 1. Open a pull request to `main`. The deploy workflow (`.github/workflows/deploy.yml`) builds a Vercel preview and comments the preview URL on your PR. CI (`.github/workflows/ci.yml`) runs the unit tests (`npm test`) and the linter (`npm run lint`) — a PR that fails either cannot be merged.
-2. When the PR is merged, a push to `main` triggers a production deployment to `vipassana-assistant.vercel.app`.
+2. When the PR is merged, a push to `main` triggers CI first; on success, the deploy workflow ships a production deployment to `vipassana-assistant.vercel.app`. A push to `main` with failing CI does not deploy.
 
 ## Deployment architecture
 

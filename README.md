@@ -40,7 +40,7 @@ On every pull request to `main` (and on pushes to `main`), GitHub Actions runs b
 
 ## Deployment
 
-Live at [vipassana-assistant.vercel.app](https://vipassana-assistant.vercel.app). PRs get a Vercel preview URL; merges to `main` deploy to production automatically — see [DEPLOYMENT.md](DEPLOYMENT.md).
+Live at [vipassana-assistant.vercel.app](https://vipassana-assistant.vercel.app). PRs get a Vercel preview URL after CI passes; merges to `main` deploy to production only after CI passes — see [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## Contributing
 
@@ -49,7 +49,7 @@ PRs to `main` are welcome. For anything non-trivial, check `AGENTS.md` first —
 1. Branch, then `npm install`.
 2. Run locally with `npm run dev` (needs `GEMINI_API_KEY` in `.env`).
 3. Ensure `npm test` and `npm run lint` pass.
-4. Open a pull request to `main`. CI runs both on every PR; merging auto-deploys to production (see [DEPLOYMENT.md](DEPLOYMENT.md)).
+4. Open a pull request to `main`. CI runs both on every PR; merging auto-deploys to production once CI passes (see [DEPLOYMENT.md](DEPLOYMENT.md)).
 
 ## Security
 

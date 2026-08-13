@@ -1,8 +1,5 @@
-# vercel-deployment Specification
+## MODIFIED Requirements
 
-## Purpose
-TBD - created by archiving change deploy-on-vercel. Update Purpose after archive.
-## Requirements
 ### Requirement: Vercel Project Deployment
 The chatbot SHALL be deployed as a Vercel project consisting of Node.js serverless functions under `api/` and a static frontend under `public/`, with no build step.
 
@@ -13,6 +10,8 @@ The chatbot SHALL be deployed as a Vercel project consisting of Node.js serverle
 #### Scenario: Deploy via GitHub import
 - **WHEN** a push to the production branch reaches `main` and the CI workflow (`.github/workflows/ci.yml`) has completed successfully for that commit
 - **THEN** Vercel deploys the app with the same structure and environment variables, and no production deployment occurs for a commit whose CI run fails or is skipped.
+
+## ADDED Requirements
 
 ### Requirement: CI-Gated Deployments
 The deployment workflow (`.github/workflows/deploy.yml`) SHALL trigger on the completion of the CI workflow and SHALL deploy to Vercel only when the CI run concluded successfully. Both production deploys (push to `main`) and preview deploys (pull requests) SHALL be gated on CI passing, and preview deploys SHALL be limited to PRs from the repository's own owner.
@@ -36,33 +35,3 @@ The deployment workflow (`.github/workflows/deploy.yml`) SHALL trigger on the co
 #### Scenario: Deploy targets the CI-tested commit
 - **WHEN** the deploy workflow runs after a successful CI run
 - **THEN** it builds and deploys the exact commit that CI tested (`workflow_run.head_sha`), not the default-branch head.
-
-### Requirement: Gemini LLM Access
-The chatbot SHALL obtain LLM completions through Google Gemini's OpenAI-compatible endpoint (`https://generativelanguage.googleapis.com/v1beta/openai/chat/completions`) authenticated by the `GEMINI_API_KEY` environment variable, using the free `gemini-3.1-flash-lite-preview` model by default. `GEMINI_API_KEY` SHALL be configured. No secondary provider or fallback key is required.
-
-#### Scenario: Chat request routes through Gemini
-- **WHEN** a user sends a message to the chatbot and `GEMINI_API_KEY` is set
-- **THEN** the agent sends the request to Google Gemini's OpenAI-compatible endpoint with the configured model and returns the completion
-
-#### Scenario: Model is configurable
-- **WHEN** `AGENT_MODEL` is set in the environment
-- **THEN** the agent uses that model id; when unset it defaults to `gemini-3.1-flash-lite-preview`
-
-### Requirement: Stateless Chat API Endpoint
-The system SHALL expose a single stateless `POST /api/chat` endpoint that accepts the full message history from the client, applies the agent (system prompt + knowledge base + tools), and returns the sanitized response text.
-
-#### Scenario: User message returns agent response
-- **WHEN** a client POSTs `{ "messages": [{ "role": "user", "content": "..." }] }` to `/api/chat`
-- **THEN** the endpoint returns `{ "text": "<sanitized response>" }` without requiring server-side session state.
-
-#### Scenario: Message history is bounded
-- **WHEN** the client sends more than 20 messages
-- **THEN** the endpoint trims the history to the most recent 20 messages before invoking the model.
-
-### Requirement: Runtime Environment Configuration
-The project SHALL define its runtime configuration (function duration, region) in `vercel.json` so behavior is reproducible across local `vercel dev` and production.
-
-#### Scenario: Functions run in a region near Vietnam
-- **WHEN** the project is deployed
-- **THEN** `api/chat.js` runs in the `sin1` (Singapore) region and has a bounded `maxDuration`.
-

@@ -10,7 +10,7 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 
-import { chatCompletion, hasProviderKey, resolveModel } from "../lib/llm.js";
+import { chatCompletion, DEFAULT_GEMINI_MODEL, hasProviderKey, resolveModel } from "../lib/llm.js";
 
 const ORIGINAL_FETCH = globalThis.fetch;
 const requests = [];
@@ -65,7 +65,7 @@ const BASE_ENV = { GEMINI_API_KEY: "gk", AGENT_MODEL: undefined };
 
 test("resolveModel: AGENT_MODEL > provider default", () => {
   setEnv({ ...BASE_ENV });
-  assert.equal(resolveModel({ name: "gemini" }), "gemini-3.1-flash-lite-preview");
+  assert.equal(resolveModel({ name: "gemini" }), DEFAULT_GEMINI_MODEL);
 
   setEnv({ ...BASE_ENV, AGENT_MODEL: "agent-x" });
   assert.equal(resolveModel({ name: "gemini" }), "agent-x");
@@ -90,7 +90,7 @@ test("chatCompletion: serves the completion with the default model", async () =>
   assert.equal(requests.length, 1);
   assert.equal(requests[0].url, GEMINI_URL);
   assert.equal(requests[0].headers.Authorization, "Bearer gk");
-  assert.equal(requests[0].body.model, "gemini-3.1-flash-lite-preview");
+  assert.equal(requests[0].body.model, DEFAULT_GEMINI_MODEL);
   assert.equal(requests[0].body.messages[0].content, "hi");
 });
 
