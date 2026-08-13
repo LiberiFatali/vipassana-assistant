@@ -57,4 +57,4 @@ Two layers of domain gating: a system-prompt instruction that forbids untrusted 
 
 ## License
 
-Licensed under the [GNU Affero General Public License v3.0](LICENSE) (or any later version). Any use or modification of this project must remain AGPL-3.0, preserve the attribution notice, and credit the original repository [vipassana-ucenlist-agent](https://github.com/LiberiFatali/vipassana-ucenlist-agent).
+Licensed under the [GNU Affero General Public License v3.0](LICENSE) (or any later version). Any use or modification of this project must remain AGPL-3.0, preserve the attribution notice, and credit the original repository [vipassana-assistant](https://github.com/LiberiFatali/vipassana-assistant).
