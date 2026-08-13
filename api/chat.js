@@ -3,8 +3,9 @@
  *
  * Stateless: the client supplies the full message history; the server prepends
  * the system prompt (base template + injected SKILL.md), runs a manual tool
- * loop against the OpenCode Zen chat-completions endpoint (up to 5 steps),
- * sanitizes the final text with sanitize_urls(), and returns { text }.
+ * loop against the LLM provider chain in lib/llm.js (Gemini primary, OpenCode
+ * Zen fallback; up to 5 steps), sanitizes the final text with sanitize_urls(),
+ * and returns { text }.
  *
  * Direct fetch on purpose: the Zen endpoint is plain OpenAI-compatible and the
  * previous AI SDK layer (ai + @ai-sdk/openai-compatible) added ~12MB of deps
@@ -12,6 +13,7 @@
  * response model where URL sanitization happens at a single trustworthy point
  * on the complete final text.
  */
+import { chatCompletion, hasProviderKey, warnApiKeyMissing } from "../lib/llm.js";
 import { KNOWLEDGE_SYSTEM_PROMPT } from "../lib/system-prompt.js";
 import { loadKnowledgeBase } from "../lib/knowledge.js";
 import { sanitize_urls } from "../lib/sanitize.js";
@@ -30,7 +32,11 @@ const MAX_MESSAGES = 20;
 const MAX_REQUEST_MESSAGES = 100;
 const MAX_MESSAGE_LENGTH = 20000;
 const MAX_TOOL_STEPS = 5;
-const LLM_TIMEOUT_MS = 100000;
+// Total wall-clock budget for every LLM call (primary attempt + backoff +
+// fallback). Matches Vercel's `maxDuration: 60` so a request can never outlive
+// its function budget. Provider selection, keys, and model resolution live in
+// lib/llm.js (Gemini primary, OpenCode Zen fallback by default).
+const LLM_TIMEOUT_MS = 60000;
 const TOOL_RESULT_ECHO_MAX = 8192;
 
 // ─── CORS ────────────────────────────────────────────────────────────────────
@@ -98,29 +104,6 @@ function checkRateLimit(ip) {
     }
   }
   return false;
-}
-
-// ─── API key missing: log only once per cold start ───────────────────────────
-let _apiKeyMissingLogged = false;
-function warnApiKeyMissing() {
-  if (!_apiKeyMissingLogged) {
-    _apiKeyMissingLogged = true;
-    console.error("OPENCODE_API_KEY is not set — all requests will return an error.");
-  }
-}
-
-const LLM_CHAT_URL = "https://opencode.ai/zen/v1/chat/completions";
-// Single model id used for the classifier, the knowledge fast path, the tool
-// loop, and every retry. `AGENT_MODEL` wins if set; `FAST_MODEL` is the
-// fallback override; otherwise the lightweight default. `deepseek-v4-flash-free`
-// was chosen over `mimo-v2.5-free` because the latter now behaves as a slow
-// reasoning model (~30s to first content token, tripping the first-token
-// watchdog); deepseek reaches first content in ~5s.
-const DEFAULT_MODEL = "deepseek-v4-flash-free";
-
-/** Resolve the single model id from env (AGENT_MODEL > FAST_MODEL > default). */
-function resolveModel() {
-  return process.env.AGENT_MODEL || process.env.FAST_MODEL || DEFAULT_MODEL;
 }
 
 const ERROR_RESPONSE_TEXT =
@@ -312,12 +295,10 @@ export async function POST(request) {
  * loop with the complete knowledge base.
  */
 async function generateAgentResponse(messages) {
-  const apiKey = process.env.OPENCODE_API_KEY;
-  if (!apiKey) {
+  if (!hasProviderKey()) {
     warnApiKeyMissing();
     return sanitize_urls(ERROR_RESPONSE_TEXT);
   }
-  const modelId = resolveModel();
 
   // Decide the response path from the latest user message.
   const lastUser = [...messages].reverse().find((m) => m.role === "user");
@@ -332,7 +313,7 @@ async function generateAgentResponse(messages) {
 
   let route;
   try {
-    route = await classifyIntent(userText, apiKey, modelId);
+    route = await classifyIntent(userText);
   } catch (err) {
     console.error("Intent routing failed, defaulting to tool path:", err);
     route = { kind: "tools" };
@@ -356,7 +337,7 @@ async function generateAgentResponse(messages) {
     const system = buildFastPathSystemPrompt(userText, route.lang);
     const apiMessages = [{ role: "system", content: system }, ...messages];
     try {
-      const content = await callFastPath(apiMessages, apiKey, modelId);
+      const content = await callFastPath(apiMessages);
       if (content) {
         answerCache.set(cacheKey, content);
       }
@@ -387,7 +368,8 @@ async function generateAgentResponse(messages) {
   const apiMessages = [{ role: "system", content: system }, ...messages];
 
   try {
-    const choice = await callChatCompletion(apiMessages, apiKey, modelId, { tools: false });
+    const data = await chatCompletion(apiMessages, { timeoutMs: LLM_TIMEOUT_MS });
+    const choice = data.choices && data.choices[0];
     const content = (choice && choice.message && typeof choice.message.content === "string") ? choice.message.content : "";
     return sanitize_urls(content || ERROR_RESPONSE_TEXT);
   } catch (err) {
@@ -410,78 +392,27 @@ function truncateToolResult(result) {
 }
 
 /**
- * Run the fast-path LLM call with the configured model, retrying once if the
- * request fails before producing output. Returns the assistant's content
- * string, or "" on a non-string content.
+ * Run the fast-path LLM call (no tools attached), retrying once if the request
+ * fails before producing output. Returns the assistant's content string, or ""
+ * on a non-string content.
  */
-async function callFastPath(apiMessages, apiKey, modelId) {
+async function callFastPath(apiMessages) {
   let choice;
   try {
-    choice = await callChatCompletion(apiMessages, apiKey, modelId, { tools: false });
+    const data = await chatCompletion(apiMessages, { timeoutMs: LLM_TIMEOUT_MS });
+    choice = data.choices && data.choices[0];
   } catch (fastErr) {
     if (isTimeoutError(fastErr)) {
-      // A 50s timeout with no output is a stalled provider — fail fast rather
-      // than making the caller wait through another 50s retry.
+      // A timeout with no output is a stalled provider — fail fast rather
+      // than making the caller wait through another timeout-budget retry.
       console.error("Fast model call timed out with no output:", fastErr);
       throw fastErr;
     }
     console.error("Fast model call failed, retrying once:", fastErr);
-    choice = await callChatCompletion(apiMessages, apiKey, modelId, { tools: false });
+    const retry = await chatCompletion(apiMessages, { timeoutMs: LLM_TIMEOUT_MS });
+    choice = retry.choices && retry.choices[0];
   }
-  return choice.message && typeof choice.message.content === "string"
+  return choice && choice.message && typeof choice.message.content === "string"
     ? choice.message.content
     : "";
-}
-
-/**
- * POST a chat-completions request.
- */
-async function callChatCompletion(apiMessages, apiKey, modelId, options = {}) {
-  const useTools = options.tools === true;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), LLM_TIMEOUT_MS);
-
-  const payload = {
-    model: modelId,
-    messages: apiMessages,
-  };
-  if (useTools) {
-    payload.tools = TOOLS.map((t) => ({
-      type: "function",
-      function: { name: t.name, description: t.description, parameters: t.parameters },
-    }));
-    payload.tool_choice = "auto";
-  }
-
-  let res;
-  try {
-    res = await fetch(LLM_CHAT_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(payload),
-      signal: controller.signal,
-    });
-  } finally {
-    clearTimeout(timer);
-  }
-
-  let data;
-  try {
-    data = await res.json();
-  } catch {
-    throw new Error(`LLM API returned non-JSON (status ${res.status})`);
-  }
-
-  if (!res.ok) {
-    throw new Error(`LLM API error ${res.status}: ${JSON.stringify(data).slice(0, 300)}`);
-  }
-
-  const choice = data.choices && data.choices[0];
-  if (!choice || !choice.message) {
-    throw new Error("LLM API returned no choices");
-  }
-  return choice;
 }

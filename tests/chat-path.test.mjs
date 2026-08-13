@@ -4,10 +4,13 @@
  *
  * Verifies:
  *  - knowledge-only questions take the fast path: one LLM call, no `tools`
- *    attached, trimmed knowledge prompt;
+ *    attached, trimmed knowledge prompt, routed to the Gemini provider;
  *  - live-schedule questions take the tool path: `tools` attached, full
  *    knowledge base injected;
- *  - ambiguous questions flow through the LLM classifier.
+ *  - ambiguous questions flow through the LLM classifier;
+ *  - Gemini failure falls through to the OpenCode Zen fallback;
+ *  - Zen-only mode routes everything to Zen;
+ *  - no provider key → static bilingual error without any LLM call.
  *
  * Run: node --test tests/chat-path.test.mjs
  */
@@ -20,6 +23,9 @@ import { answerCache } from "../lib/answer-cache.js";
 const ORIGINAL_FETCH = globalThis.fetch;
 const requests = [];
 
+const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+const ZEN_URL = "https://opencode.ai/zen/v1/chat/completions";
+
 const FAKE_RESPONSE = {
   ok: true,
   status: 200,
@@ -30,23 +36,57 @@ const FAKE_RESPONSE = {
   },
 };
 
+function errorResponse(status) {
+  return {
+    ok: false,
+    status,
+    async json() {
+      return { error: { message: `stub ${status}` } };
+    },
+  };
+}
+
+// Per-URL status override: return a status number to stub an error for that
+// URL, or null/undefined for the default success response.
+let stubStatusFor = () => null;
+
 before(() => {
-  process.env.OPENCODE_API_KEY = "test-key";
+  process.env.GEMINI_API_KEY = "test-gemini-key";
+  process.env.OPENCODE_API_KEY = "test-zen-key";
   process.env.AGENT_MODEL = "test-model";
   process.env.FAST_MODEL = "test-fast-model";
   answerCache.clear();
   globalThis.fetch = async (url, opts) => {
     requests.push({ url: String(url), body: JSON.parse(opts.body) });
-    return FAKE_RESPONSE;
+    const status = stubStatusFor(String(url));
+    return status ? errorResponse(status) : FAKE_RESPONSE;
   };
 });
 
 after(() => {
   globalThis.fetch = ORIGINAL_FETCH;
+  delete process.env.GEMINI_API_KEY;
   delete process.env.OPENCODE_API_KEY;
   delete process.env.AGENT_MODEL;
   delete process.env.FAST_MODEL;
 });
+
+async function withEnv(env, fn) {
+  const saved = {};
+  for (const [k, v] of Object.entries(env)) {
+    saved[k] = process.env[k];
+    if (v === undefined) delete process.env[k];
+    else process.env[k] = v;
+  }
+  try {
+    await fn();
+  } finally {
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  }
+}
 
 function post(messages) {
   return POST(
@@ -68,8 +108,9 @@ test("fast path: knowledge-only question sends no tools and a trimmed prompt", a
   assert.equal(data.text, "A curated answer.");
   assert.equal(requests.length, 1, "single LLM call on the fast path");
 
-  const body = requests[0].body;
-  assert.equal(body.model, "test-model", "single model is used on the fast path");
+  const { url, body } = requests[0];
+  assert.ok(url.includes(GEMINI_URL), "fast path hits the Gemini provider");
+  assert.equal(body.model, "test-model", "AGENT_MODEL override is used");
   assert.equal(body.tools, undefined, "no tools attached on the fast path");
   assert.equal(body.tool_choice, undefined, "no tool_choice on the fast path");
 
@@ -88,7 +129,8 @@ test("tool path: live-schedule question uses pure composer with pre-fetched sche
   assert.equal(data.text, "A curated answer.");
   assert.equal(requests.length, 1, "single composer call when live context is injected");
 
-  const body = requests[0].body;
+  const { url, body } = requests[0];
+  assert.ok(url.includes(GEMINI_URL), "composer path hits the Gemini provider");
   assert.equal(body.tools, undefined, "no tools attached on pure composer path");
   assert.equal(body.tool_choice, undefined, "no tool_choice on pure composer path");
 
@@ -105,6 +147,7 @@ test("ambiguous question flows through the LLM classifier before answering", asy
   // The stub's classifier response ("A curated answer.") does not start with
   // TOOLS, so the router settles on the KB fast path: classifier call + answer.
   assert.equal(requests.length, 2, "classifier call then fast-path answer");
+  assert.ok(requests[0].url.includes(GEMINI_URL), "classifier hits Gemini");
 });
 
 test("deterministic address question makes no LLM call", async () => {
@@ -144,4 +187,50 @@ test("repeated generative question is served from the answer cache", async () =>
   requests.length = 0;
   await post([{ role: "user", content: "Tell me about S.N. Goenka's biography." }]);
   assert.equal(requests.length, 0, "second ask is served from cache");
+});
+
+test("fallback: Gemini 500 falls through to OpenCode Zen", async () => {
+  answerCache.clear();
+  requests.length = 0;
+  stubStatusFor = (url) => (url.includes("generativelanguage") ? 500 : null);
+  try {
+    const res = await post([
+      { role: "user", content: "What is the daily timetable during a 10-day course?" },
+    ]);
+    const data = await res.json();
+
+    assert.equal(data.text, "A curated answer.");
+    assert.equal(requests.length, 2, "Gemini attempt then Zen fallback");
+    assert.ok(requests[0].url.includes(GEMINI_URL), "first request is Gemini");
+    assert.ok(requests[1].url.includes(ZEN_URL), "fallback request is Zen");
+  } finally {
+    stubStatusFor = () => null;
+  }
+});
+
+test("zen-only mode: OPENCODE_API_KEY alone routes requests to Zen", async () => {
+  answerCache.clear();
+  requests.length = 0;
+  await withEnv({ GEMINI_API_KEY: undefined }, async () => {
+    const res = await post([
+      { role: "user", content: "What is the daily timetable during a 10-day course?" },
+    ]);
+    const data = await res.json();
+
+    assert.equal(data.text, "A curated answer.");
+    assert.equal(requests.length, 1, "single LLM call on the fast path");
+    assert.ok(requests[0].url.includes(ZEN_URL), "request routes to Zen");
+  });
+});
+
+test("no provider keys: request returns the static bilingual error without LLM calls", async () => {
+  answerCache.clear();
+  requests.length = 0;
+  await withEnv({ GEMINI_API_KEY: undefined, OPENCODE_API_KEY: undefined }, async () => {
+    const res = await post([{ role: "user", content: "What is Vipassana?" }]);
+    const data = await res.json();
+
+    assert.ok(data.text.includes("Xin lỗi"), "bilingual error text returned");
+    assert.equal(requests.length, 0, "no LLM request when no provider key");
+  });
 });

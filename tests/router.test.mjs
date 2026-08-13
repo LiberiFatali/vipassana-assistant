@@ -80,7 +80,7 @@ test("classifyIntent: clear live-data paraphrase resolves to tools with no LLM c
     throw new Error("LLM should not be consulted for a retrieval-resolved request");
   };
   try {
-    const r = await classifyIntent("Những khóa nào sắp diễn ra trong thời gian tới?", "k", "m");
+    const r = await classifyIntent("Những khóa nào sắp diễn ra trong thời gian tới?");
     assert.equal(r.kind, "tools");
     assert.equal(calls, 0, "retrieval resolved the request deterministically");
   } finally {
@@ -90,6 +90,7 @@ test("classifyIntent: clear live-data paraphrase resolves to tools with no LLM c
 
 test("classifyIntent: below-margin bare course noun still consults the LLM classifier", async () => {
   let calls = 0;
+  process.env.GEMINI_API_KEY = "test-key";
   globalThis.fetch = async () => {
     calls += 1;
     return {
@@ -101,22 +102,48 @@ test("classifyIntent: below-margin bare course noun still consults the LLM class
     };
   };
   try {
-    const r = await classifyIntent("khóa thiền", "k", "m");
+    const r = await classifyIntent("khóa thiền");
     assert.equal(r.kind, "tools", "LLM classifier resolves to tools");
     assert.equal(calls, 1, "LLM classifier consulted exactly once");
   } finally {
+    delete process.env.GEMINI_API_KEY;
+    globalThis.fetch = ORIGINAL_FETCH;
+  }
+});
+
+test("classifyIntent: empty classifier content resolves to the tool path (conservative)", async () => {
+  let calls = 0;
+  process.env.GEMINI_API_KEY = "test-key";
+  globalThis.fetch = async () => {
+    calls += 1;
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return { choices: [{ message: { content: "" } }] };
+      },
+    };
+  };
+  try {
+    const r = await classifyIntent("khóa thiền");
+    assert.equal(r.kind, "tools", "empty classifier output defaults to tools, never kb");
+    assert.equal(calls, 1, "LLM classifier consulted exactly once");
+  } finally {
+    delete process.env.GEMINI_API_KEY;
     globalThis.fetch = ORIGINAL_FETCH;
   }
 });
 
 test("classifyIntent: classifier failure still defaults to the tool path", async () => {
+  process.env.GEMINI_API_KEY = "test-key";
   globalThis.fetch = async () => {
     throw new Error("simulated network failure");
   };
   try {
-    const r = await classifyIntent("khóa thiền", "k", "m");
+    const r = await classifyIntent("khóa thiền");
     assert.equal(r.kind, "tools", "conservative tools default on classifier failure");
   } finally {
+    delete process.env.GEMINI_API_KEY;
     globalThis.fetch = ORIGINAL_FETCH;
   }
 });

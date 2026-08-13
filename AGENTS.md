@@ -6,7 +6,7 @@ This file provides guidance to agent tools (opencode and others) when working wi
 
 A bilingual (Vietnamese/English) chatbot agent that answers questions about Vipassana meditation courses run by UCENLIST at two centers in Vietnam (Dhamma Virocana in Hà Nội, Dhamma Vutthi in TP. HCM). It combines a static knowledge base (embedded skill doc) with live course-schedule lookups via a companion scraper, and enforces strict output safety (domain gating, human-in-the-loop registration).
 
-The project is a Node.js serverless app deployed on Vercel. The public surface is a single endpoint `POST /api/chat`. It returns JSON `{ text }` (the client owns the conversation history). LLM access uses OpenCode Zen (OpenAI-compatible chat-completions).
+The project is a Node.js serverless app deployed on Vercel. The public surface is a single endpoint `POST /api/chat`. It returns JSON `{ text }` (the client owns the conversation history). LLM access uses Google Gemini (free AI Studio tier) with OpenCode Zen as fallback, both over OpenAI-compatible chat-completions (`lib/llm.js`).
 
 ## Commands
 
@@ -14,8 +14,10 @@ The project is a Node.js serverless app deployed on Vercel. The public surface i
 npm install
 
 # Set up credentials
-#   OPENCODE_API_KEY — required (OpenCode Zen API key, https://opencode.ai/auth)
-#   AGENT_MODEL      — optional model override (default deepseek-v4-flash-free)
+#   GEMINI_API_KEY   — required (primary provider: Google Gemini, https://aistudio.google.com)
+#   OPENCODE_API_KEY — optional (fallback provider: OpenCode Zen, https://opencode.ai/auth)
+#   LLM_PROVIDER     — optional primary provider: "gemini" (default) or "zen"
+#   AGENT_MODEL      — optional model override (default gemini-3.1-flash-lite-preview)
 #   FAST_MODEL       — optional legacy override (AGENT_MODEL wins if both set)
 # For local dev, create a .env file (see README).
 
@@ -35,6 +37,10 @@ public/markdown.js       # zero-dependency markdown renderer (escape-first, trus
 server.js                # local dev server — static public/ + routes POST /api/chat
 api/chat.js              # POST /api/chat — intent router → fast path or tool loop → sanitized output
 lib/router.js            # bilingual (EN/VI) intent router: knowledge-only vs live-data (+ tiny LLM fallback)
+lib/llm.js               # multi-provider LLM access — OpenAI-compatible chat-completions, Gemini primary
+                         #   (gemini-3.1-flash-lite-preview, GEMINI_API_KEY) with OpenCode Zen fallback
+                         #   (OPENCODE_API_KEY); 429 backoff → provider fallback; model resolution
+                         #   (AGENT_MODEL > FAST_MODEL > provider default); total budget = timeoutMs
 lib/quick-answers.js     # deterministic no-LLM answers (center info, Vipassana definition, FAQ) for the fast path
 lib/answer-cache.js      # in-memory TTL cache for repeated fast-path answers
 lib/sections.js          # SKILL.md sectioning + fast-path prompt builder (trimmed knowledge context)
@@ -57,7 +63,7 @@ Only `api/chat.js` lives under `api/` — everything else moved to `lib/` (Verce
 
 `api/chat.js` classifies the latest user message with `lib/router.js`:
 
-- **Knowledge-only (`kb`)** → fast path, in this order: (1) deterministic structured answers via `lib/quick-answers.js` (center address/phone/email/website from `lib/centers.js`, curated bilingual Vipassana definition, and common FAQs like cost/diet/eligibility) with **no LLM call**; (2) the in-memory answer cache (`lib/answer-cache.js`, keyed by `lang|normalized question`) for repeated questions; (3) a single LLM call with a trimmed system prompt (only the relevant SKILL.md sections via `lib/sections.js`), **no tools attached**. Every fast-path output passes through `sanitize_urls()`. The LLM uses a single model id (`AGENT_MODEL` override, default `deepseek-v4-flash-free`) on every path (classifier, fast path, tool loop, retries).
+- **Knowledge-only (`kb`)** → fast path, in this order: (1) deterministic structured answers via `lib/quick-answers.js` (center address/phone/email/website from `lib/centers.js`, curated bilingual Vipassana definition, and common FAQs like cost/diet/eligibility) with **no LLM call**; (2) the in-memory answer cache (`lib/answer-cache.js`, keyed by `lang|normalized question`) for repeated questions; (3) a single LLM call with a trimmed system prompt (only the relevant SKILL.md sections via `lib/sections.js`), **no tools attached**. Every fast-path output passes through `sanitize_urls()`. Every LLM call (classifier, fast path, composer, retries) goes through `lib/llm.js`: Gemini primary (`gemini-3.1-flash-lite-preview`, `GEMINI_API_KEY`) → 429 backoff → OpenCode Zen fallback (`OPENCODE_API_KEY`), with model resolved as `AGENT_MODEL` > `FAST_MODEL` > provider default.
 - **Live-data (`tools`)** → first the deterministic schedule fast path (`lib/schedule-answers.js`): a windowed schedule query (a schedule/course keyword plus a center and/or time window such as "cuối tháng này", "tháng này", "tháng sau", "tuần này/khác", "tháng N") calls `list_courses` once and renders a bilingual markdown answer with **no LLM call and no tools**. A bare schedule query with a course noun but no center/time window ("khóa thiền sắp tới", "which courses") defaults to the upcoming-courses list across both centers. Anything that doesn't match (or fails) returns `null` and falls through to the composer path. `list_courses` scrapes `schedule.vridhamma.org` (parallel across centers for `center="all"`, in-flight dedup) with a live → cached → fallback chain; every record carries `data_freshness` (`"live"` / `"cached"` / `"fallback"`).
 
 Do not break these invariants: the fast path must never attach tools, the final text of every path must pass through `sanitize_urls()`, and the tool path must keep the full knowledge base.
