@@ -44,12 +44,13 @@ lib/knowledge.js         # loads SKILL.md from disk, module-cached
 lib/system-prompt.js     # KNOWLEDGE_SYSTEM_PROMPT template ({knowledge_base} placeholder)
 lib/sanitize.js          # TRUSTED_DOMAINS + sanitize_urls() — Safe Domain Gating backstop
 lib/normalize.js         # diacritic-stripping normalizer (router + cache keys)
+lib/log.js               # zero-dep structured JSON-line logging (AsyncLocalStorage correlation, safeErr, qPreview/qHash, LOG_LEVEL)
 lib/tools/               # list_courses, get_course_details, get_center_info (registry + zod parse)
 lib/schedule-answers.js  # deterministic schedule answers (windowed + default-upcoming queries, no LLM)
 lib/scraper/             # vri-schedule.js (fetch + cheerio), cache.js (TTL + fallback chain)
 lib/centers.js           # static center info
 lib/fallback-schedule.json  # static fallback schedule data
-tests/                   # node:test suites (sanitize, markdown, router, sections, chat-path, quick-answers, answer-cache)
+tests/                   # node:test suites (sanitize, markdown, router, sections, chat-path, log, logging-path, quick-answers, answer-cache)
 vercel.json              # function maxDuration + region (sin1)
 ```
 
@@ -67,6 +68,14 @@ Do not break these invariants: the fast path must never attach tools, the final 
 ### Data-freshness fallback chain
 
 Live scrape → 10-min in-memory cache → stale cache (up to 24h) → `lib/fallback-schedule.json`. The system prompt requires surfacing a `⚠️` warning whenever `data_freshness == "fallback"`. The in-memory cache is per-function-instance; Vercel cold starts re-scrape.
+
+### Observability & logging
+
+`lib/log.js` emits one JSON object per line via `console.*` (info→log, warn→warn, error→error) into Vercel Runtime Logs — no dependencies, no Pro features. `api/chat.js` wraps each request in `withLogContext({ requestId, conversationId, lang })` (AsyncLocalStorage), so every line from any module carries the same correlation IDs with no signature churn. The client sends an optional `conversationId` (`crypto.randomUUID()` persisted in `localStorage`, rotated on Clear) so a full conversation is greppable across requests; the server tolerates its absence.
+
+Key events: `request.start`, `route.decision`, `path.answer` (path ∈ `out-of-scope|missing-key|quick|cache|fast|schedule|quick-fallback|composer`, with `latencyMs`/`answerLen`), `request.end` (outcome ok/error/timeout); `llm.call`/`llm.backoff`/`llm.error`/`llm.key-missing`; `schedule.fetch` (reports `data_freshness` live/cached/fallback per center) and `schedule.fetch-error`; `schedule.deterministic.error`/`schedule.context.error` (the previously silent schedule-path catches).
+
+Privacy posture: full user messages and full answers are never logged. Query text appears only as `qPreview` (first 80 chars, diacritic-stripped) plus `qHash` (16-hex sha256) for repeat detection; errors pass through `safeErr` (name + message capped at 300 chars, no stacks/keys/payloads). `LOG_LEVEL` env (default `info`) filters severity. Do not log provider keys, `Authorization` headers, or raw `Error` objects.
 
 ## Knowledge skill
 

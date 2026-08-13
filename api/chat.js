@@ -12,12 +12,21 @@
  * non-streaming response model where URL sanitization happens at a single
  * trustworthy point on the complete final text.
  */
+import { randomUUID } from "node:crypto";
 import { chatCompletion, hasProviderKey, warnApiKeyMissing } from "../lib/llm.js";
 import { KNOWLEDGE_SYSTEM_PROMPT } from "../lib/system-prompt.js";
 import { loadKnowledgeBase } from "../lib/knowledge.js";
 import { sanitize_urls } from "../lib/sanitize.js";
 import { classifyIntent } from "../lib/router.js";
 import { detectLanguage, normalize } from "../lib/router.js";
+import {
+  hashQuestion,
+  logError,
+  logInfo,
+  qPreview,
+  safeErr,
+  withLogContext,
+} from "../lib/log.js";
 import { buildFastPathSystemPrompt } from "../lib/sections.js";
 import { getQuickAnswer } from "../lib/quick-answers.js";
 import { getOutOfScopeAnswer } from "../lib/out-of-scope.js";
@@ -200,7 +209,52 @@ export async function POST(request) {
     content: m.content,
   }));
 
-  const text = await generateAgentResponse(trimmed);
+  // Correlation IDs: requestId is server-generated per request; conversationId
+  // is optional, client-supplied (bounded) and makes a full conversation
+  // greppable in the logs across requests. Absent/non-string is tolerated.
+  const requestId = randomUUID();
+  const conversationId =
+    typeof body.conversationId === "string" &&
+    body.conversationId.length > 0 &&
+    body.conversationId.length <= 64
+      ? body.conversationId
+      : null;
+
+  const lastUser = [...trimmed].reverse().find((m) => m.role === "user");
+  const userText = lastUser ? lastUser.content : "";
+  const lang = detectLanguage(userText);
+
+  const startMs = Date.now();
+  let text;
+  try {
+    text = await withLogContext({ requestId, conversationId, lang }, async () => {
+      logInfo("request.start", {
+        nMessages: trimmed.length,
+        lang,
+        qPreview: qPreview(userText),
+        qHash: hashQuestion(userText),
+        hasConversationId: Boolean(conversationId),
+      });
+      const result = await generateAgentResponse(trimmed);
+      const outcome =
+        result === TIMEOUT_RESPONSE_TEXT
+          ? "timeout"
+          : result === ERROR_RESPONSE_TEXT
+            ? "error"
+            : "ok";
+      logInfo("request.end", { outcome, latencyMs: Date.now() - startMs });
+      return result;
+    });
+  } catch (err) {
+    // Unexpected failure (generateAgentResponse normally self-heals) — log the
+    // outcome and preserve the original behavior (rethrow → server error).
+    logError("request.end", {
+      outcome: "error",
+      latencyMs: Date.now() - startMs,
+      ...safeErr(err),
+    });
+    throw err;
+  }
   return Response.json({ text }, { headers: corsHeaders });
 }
 
@@ -214,9 +268,20 @@ export async function POST(request) {
  * loop with the complete knowledge base.
  */
 async function generateAgentResponse(messages) {
+  const t0 = Date.now();
+  const done = (path, text, extra = {}) => {
+    logInfo("path.answer", {
+      path,
+      latencyMs: Date.now() - t0,
+      answerLen: typeof text === "string" ? text.length : 0,
+      ...extra,
+    });
+    return text;
+  };
+
   if (!hasProviderKey()) {
     warnApiKeyMissing();
-    return sanitize_urls(ERROR_RESPONSE_TEXT);
+    return done("missing-key", sanitize_urls(ERROR_RESPONSE_TEXT));
   }
 
   // Decide the response path from the latest user message.
@@ -227,14 +292,15 @@ async function generateAgentResponse(messages) {
   // it overrides both the KB fast path and the tool path.
   const outOfScope = getOutOfScopeAnswer(userText, detectLanguage(userText));
   if (outOfScope !== null) {
-    return sanitize_urls(outOfScope);
+    return done("out-of-scope", sanitize_urls(outOfScope));
   }
 
   let route;
   try {
     route = await classifyIntent(userText);
+    logInfo("route.decision", { route: route.kind, lang: route.lang });
   } catch (err) {
-    console.error("Intent routing failed, defaulting to tool path:", err);
+    logError("route.error", { ...safeErr(err) });
     route = { kind: "tools" };
   }
 
@@ -242,14 +308,14 @@ async function generateAgentResponse(messages) {
     // 1) Deterministic structured answers — no LLM call at all.
     const quick = getQuickAnswer(userText, route.lang);
     if (quick !== null) {
-      return sanitize_urls(quick);
+      return done("quick", sanitize_urls(quick));
     }
 
     // 2) In-memory answer cache for repeated questions.
     const cacheKey = `${route.lang}|${normalize(userText)}`;
     const cached = answerCache.get(cacheKey);
     if (cached !== null) {
-      return sanitize_urls(cached);
+      return done("cache", sanitize_urls(cached), { cacheHit: true });
     }
 
     // 3) Fast path: one call, trimmed knowledge context, no tools attached.
@@ -260,17 +326,21 @@ async function generateAgentResponse(messages) {
       if (content) {
         answerCache.set(cacheKey, content);
       }
-      return sanitize_urls(content || ERROR_RESPONSE_TEXT);
+      return done("fast", sanitize_urls(content || ERROR_RESPONSE_TEXT));
     } catch (err) {
-      console.error("Fast-path LLM call failed:", err);
-      return sanitize_urls(isTimeoutError(err) ? TIMEOUT_RESPONSE_TEXT : ERROR_RESPONSE_TEXT);
+      logError("fast-path.error", { ...safeErr(err) });
+      return done(
+        "fast",
+        sanitize_urls(isTimeoutError(err) ? TIMEOUT_RESPONSE_TEXT : ERROR_RESPONSE_TEXT),
+        { ...safeErr(err) }
+      );
     }
   }
 
   // Live-data path (Pure Composer mode): pre-fetch schedule context server-side and call LLM once.
   const schedule = await getScheduleAnswer(userText, route.lang);
   if (schedule !== null) {
-    return sanitize_urls(schedule);
+    return done("schedule", sanitize_urls(schedule));
   }
 
   // KB fallback: if the question has a deterministic quick-answer (e.g. center
@@ -278,7 +348,7 @@ async function generateAgentResponse(messages) {
   // answers when the router misclassifies a center-info question as tools.
   const quickFallback = getQuickAnswer(userText, route.lang);
   if (quickFallback !== null) {
-    return sanitize_urls(quickFallback);
+    return done("quick-fallback", sanitize_urls(quickFallback));
   }
 
   const liveContext = await buildLiveScheduleContext(userText, route.lang);
@@ -290,10 +360,14 @@ async function generateAgentResponse(messages) {
     const data = await chatCompletion(apiMessages, { timeoutMs: LLM_TIMEOUT_MS });
     const choice = data.choices && data.choices[0];
     const content = (choice && choice.message && typeof choice.message.content === "string") ? choice.message.content : "";
-    return sanitize_urls(content || ERROR_RESPONSE_TEXT);
+    return done("composer", sanitize_urls(content || ERROR_RESPONSE_TEXT));
   } catch (err) {
-    console.error("LLM composer call failed:", err);
-    return sanitize_urls(isTimeoutError(err) ? TIMEOUT_RESPONSE_TEXT : ERROR_RESPONSE_TEXT);
+    logError("composer.error", { ...safeErr(err) });
+    return done(
+      "composer",
+      sanitize_urls(isTimeoutError(err) ? TIMEOUT_RESPONSE_TEXT : ERROR_RESPONSE_TEXT),
+      { ...safeErr(err) }
+    );
   }
 }
 
@@ -311,10 +385,10 @@ async function callFastPath(apiMessages) {
     if (isTimeoutError(fastErr)) {
       // A timeout with no output is a stalled provider — fail fast rather
       // than making the caller wait through another timeout-budget retry.
-      console.error("Fast model call timed out with no output:", fastErr);
+      logError("fast-timeout", { ...safeErr(fastErr) });
       throw fastErr;
     }
-    console.error("Fast model call failed, retrying once:", fastErr);
+    logError("fast-retry", { ...safeErr(fastErr) });
     const retry = await chatCompletion(apiMessages, { timeoutMs: LLM_TIMEOUT_MS });
     choice = retry.choices && retry.choices[0];
   }

@@ -317,6 +317,7 @@
       const MAX_MESSAGES = 20;
       const STORAGE_KEY = "vipassana_chat_history";
       const langKey = "vipassana_chat_lang";
+      const SESSION_KEY = "vipassana_chat_session";
 
       const I18N = {
         vi: {
@@ -360,6 +361,7 @@
 
       let lang = localStorage.getItem(langKey) || "vi";
       let history = loadHistory();
+      let conversationId = loadConversationId();
 
       function loadHistory() {
         try {
@@ -378,6 +380,30 @@
         } catch (e) {
           /* storage full/unavailable — keep in-memory history */
         }
+      }
+
+      function newConversationId() {
+        try {
+          if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+            return crypto.randomUUID();
+          }
+        } catch (e) {
+          /* fall through to fallback */
+        }
+        return "c-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+      }
+
+      function loadConversationId() {
+        let id = localStorage.getItem(SESSION_KEY);
+        if (!id) {
+          id = newConversationId();
+          try {
+            localStorage.setItem(SESSION_KEY, id);
+          } catch (e) {
+            /* storage unavailable — keep in-memory id */
+          }
+        }
+        return id;
       }
 
       function welcomeText() {
@@ -504,7 +530,7 @@
           const res = await fetch("/api/chat", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ messages: history.slice(-MAX_MESSAGES) }),
+            body: JSON.stringify({ messages: history.slice(-MAX_MESSAGES), conversationId }),
             signal: controller.signal,
           });
           if (!res.ok) throw new Error("Request failed");
@@ -544,6 +570,12 @@
         }
         history = [];
         saveHistory();
+        conversationId = newConversationId();
+        try {
+          localStorage.setItem(SESSION_KEY, conversationId);
+        } catch (e) {
+          /* storage unavailable — keep in-memory id */
+        }
         chatEl.innerHTML = "";
         addMessage("agent", welcomeText(), true);
         applyLang();
