@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
 
 concurrency:
   group: vercel-deploy-${{ github.event.workflow_run.head_branch }}
@@ -17,7 +16,7 @@ jobs:
   deploy:
     name: Deploy to Vercel
     runs-on: ubuntu-latest
-    if: github.event.workflow_run.conclusion == 'success' && (github.event.workflow_run.event == 'push' || github.event.workflow_run.head_repository.full_name == github.repository)
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main'
     steps:
       - uses: actions/checkout@v7
         with:
@@ -31,70 +30,11 @@ jobs:
       - name: Install Vercel CLI
         run: npm install -g vercel@latest
 
-      - name: Resolve deployment environment
-        id: env
-        run: |
-          if [[ "${{ github.event.workflow_run.event }}" == "push" && "${{ github.event.workflow_run.head_branch }}" == "main" ]]; then
-            echo "name=production" >> "$GITHUB_OUTPUT"
-            echo "prod_flag=--prod" >> "$GITHUB_OUTPUT"
-          else
-            echo "name=preview" >> "$GITHUB_OUTPUT"
-            echo "prod_flag=" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Pull Vercel Environment Information
-        run: vercel pull --yes --environment=${{ steps.env.outputs.name }} --token=${{ secrets.VERCEL_TOKEN }}
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Build Project Artifacts
-        run: vercel build ${{ steps.env.outputs.prod_flag }} --token=${{ secrets.VERCEL_TOKEN }}
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Deploy Project Artifacts to Vercel
-        id: deploy
-        run: |
-          vercel deploy --prebuilt ${{ steps.env.outputs.prod_flag }} --token="${{ secrets.VERCEL_TOKEN }}" 2>&1 | tee /tmp/vercel-deploy.log
-          url=$(tail -1 /tmp/vercel-deploy.log)
-          echo "url=$url" >> "$GITHUB_OUTPUT"
-          echo "Deployment URL: $url"
-
-      - name: Comment preview URL on PR
-        if: github.event.workflow_run.event == 'pull_request'
-        uses: actions/github-script@v9
-        with:
-          script: |
-            const url = `${{ steps.deploy.outputs.url }}`;
-            let prNumber = github.event.workflow_run.pull_requests[0]?.number;
-            if (!prNumber) {
-              const { data: pulls } = await github.rest.pulls.list({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                head: `${github.event.workflow_run.head_repository.owner.login}:${github.event.workflow_run.head_branch}`,
-              });
-              prNumber = pulls[0]?.number;
-            }
-            if (!prNumber) {
-              console.log('No pull request found for this run; skipping preview comment.');
-              return;
-            }
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: prNumber,
-            });
-            const marker = '<!-- vercel-preview -->';
-            const existing = comments.find((c) => c.body.includes(marker));
-            const body = `${marker}\n🔗 Vercel preview: ${url}`;
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: prNumber,
-                body,
-              });
-            }
+        run: vercel deploy --prebuilt --prod --token="${{ secrets.VERCEL_TOKEN }}"
