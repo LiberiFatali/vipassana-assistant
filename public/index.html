@@ -359,7 +359,15 @@
       const sendBtn = document.getElementById("send");
       const clearBtn = document.getElementById("clear");
 
-      let lang = localStorage.getItem(langKey) || "vi";
+      function detectBrowserLang() {
+        const raw = (navigator.languages && navigator.languages[0]) || navigator.language || "";
+        return String(raw).split("-")[0].toLowerCase() === "vi" ? "vi" : "en";
+      }
+
+      let lang = (() => {
+        const stored = localStorage.getItem(langKey);
+        return stored === "vi" || stored === "en" ? stored : detectBrowserLang();
+      })();
       let history = loadHistory();
       let conversationId = loadConversationId();
 
