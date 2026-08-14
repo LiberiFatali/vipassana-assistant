@@ -66,6 +66,16 @@ const FIXTURE = [
     apply_url: "https://schedule.vridhamma.org/vi/form/vi-application-form?course=3",
     data_freshness: "live",
   },
+  {
+    center_id: "pala",
+    center: "Dhamma Pala",
+    type: "special",
+    title: "Khoá thiền tại Dhamma Pala 2026",
+    start_date: "",
+    end_date: "",
+    status: "open",
+    data_freshness: "live",
+  },
 ];
 
 // ─── Intent detection ─────────────────────────────────────────────────────────
@@ -187,6 +197,126 @@ test("default upcoming answer labels the window and lists future courses", () =>
   assert.ok(out.includes("20/08/2026"), "upcoming course listed");
   assert.ok(out.includes("26/08/2026"), "later upcoming course listed");
   assert.ok(!out.includes("01/07/2026"), "past course excluded");
+});
+
+test("dateless pala announcement appears in the default upcoming list", () => {
+  const q = detectScheduleIntent("khóa thiền sắp tới", NOW);
+  const out = formatScheduleAnswer(q, FIXTURE);
+  assert.ok(out.includes("Dhamma Pala"), "pala center heading present");
+  assert.ok(out.includes("Khoá thiền tại Dhamma Pala 2026"), "announcement title rendered");
+  assert.ok(out.includes("ucenlist.org/course-schedule"), "only the official schedule link is shown");
+  assert.ok(!out.includes("khaosat.me"), "no khaosat.me link anywhere");
+  assert.ok(!out.includes("—  —"), "no empty date range rendered");
+});
+
+test("pala announcement renders even when the dated-course cap is reached", () => {
+  const q = detectScheduleIntent("khóa thiền sắp tới", NOW);
+  const many = [];
+  for (let i = 0; i < 12; i += 1) {
+    many.push({
+      center_id: "virocana",
+      center: "Dhamma Virocana",
+      type: "10-day",
+      start_date: `2026-09-${String(i + 1).padStart(2, "0")}`,
+      end_date: "",
+      status: "open",
+      apply_url: "https://schedule.vridhamma.org/vi/form/vi-application-form?course=x",
+      data_freshness: "live",
+    });
+  }
+  many.push({
+    center_id: "pala",
+    center: "Dhamma Pala",
+    type: "special",
+    title: "Khoá thiền tại Dhamma Pala 2026",
+    start_date: "",
+    end_date: "",
+    status: "open",
+    data_freshness: "live",
+  });
+  const out = formatScheduleAnswer(q, many);
+  assert.ok(out.includes("…và "), "cap reached for dated courses");
+  assert.ok(out.includes("Khoá thiền tại Dhamma Pala 2026"), "announcement still listed past the cap");
+  assert.ok(out.includes("ucenlist.org/course-schedule"), "official schedule link present");
+  assert.ok(!out.includes("khaosat.me"), "no khaosat.me link anywhere");
+});
+
+test("dateless pala announcement is excluded from dated window queries", () => {
+  const q = detectScheduleIntent("Lịch thiền cuối tháng này ở Hà Nội", NOW);
+  const out = formatScheduleAnswer(q, FIXTURE);
+  assert.ok(!out.includes("Dhamma Pala"), "no pala entry in a dated window");
+  assert.ok(!out.includes("ucenlist.org"), "no ucenlist schedule link in a Hanoi-only dated window");
+});
+
+test("targeted pala query detects the pala center and renders the announcement", () => {
+  const q = detectScheduleIntent("khóa thiền tại Dhamma Pala sắp tới", NOW);
+  assert.ok(q, "should match");
+  assert.ok(q.centers.has("pala"), "pala center detected");
+  const out = formatScheduleAnswer(q, FIXTURE);
+  assert.ok(out.includes("Khoá thiền tại Dhamma Pala 2026"), "announcement listed for targeted query");
+  assert.ok(out.includes("ucenlist.org/course-schedule"), "official schedule link present");
+  assert.ok(!out.includes("khaosat.me"), "no khaosat.me link anywhere");
+});
+
+test("unknown-id announcement renders in the default upcoming list", () => {
+  const q = detectScheduleIntent("khóa thiền sắp tới", NOW);
+  const out = formatScheduleAnswer(
+    q,
+    FIXTURE.concat([
+      {
+        center_id: "special",
+        center: "Dhamma Pala",
+        type: "special",
+        title: "Khoá thiền đặc biệt 2027",
+        start_date: "",
+        end_date: "",
+        status: "open",
+        data_freshness: "live",
+      },
+    ])
+  );
+  assert.ok(out.includes("Khoá thiền đặc biệt 2027"), "unknown-id announcement rendered");
+  assert.ok(out.includes("Dhamma Pala"), "graceful heading fallback to course.center");
+  assert.ok(!out.includes("khaosat.me"), "no untrusted link anywhere");
+});
+
+test("unknown-id announcement is excluded from dated window queries", () => {
+  const q = detectScheduleIntent("Lịch thiền cuối tháng này ở Hà Nội", NOW);
+  const out = formatScheduleAnswer(
+    q,
+    FIXTURE.concat([
+      {
+        center_id: "special",
+        center: "Dhamma Pala",
+        type: "special",
+        title: "Khoá thiền đặc biệt 2027",
+        start_date: "",
+        end_date: "",
+        status: "open",
+        data_freshness: "live",
+      },
+    ])
+  );
+  assert.ok(!out.includes("Khoá thiền đặc biệt 2027"), "no announcement in a dated window");
+});
+
+test("dateless non-special record is not surfaced in the upcoming list", () => {
+  const q = detectScheduleIntent("khóa thiền sắp tới", NOW);
+  const out = formatScheduleAnswer(
+    q,
+    FIXTURE.concat([
+      {
+        center_id: "virocana",
+        center: "Dhamma Virocana",
+        type: "10-day",
+        start_date: "TBA",
+        end_date: "",
+        status: "unknown",
+        data_freshness: "live",
+      },
+    ])
+  );
+  assert.ok(!out.includes("TBA"), "dateless non-special record is not treated as an announcement");
 });
 
 test("fallback data surfaces the warning", () => {

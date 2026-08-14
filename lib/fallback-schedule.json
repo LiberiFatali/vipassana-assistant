@@ -49,6 +49,18 @@
       "apply_url": "https://schedule.vridhamma.org/vi/courses/vutthi",
       "notes": "Dữ liệu dự phòng — vui lòng kiểm tra schedule.vridhamma.org để biết tình trạng hiện tại. / Fallback data — check schedule.vridhamma.org for current status.",
       "data_freshness": "fallback"
+    },
+    {
+      "center": "Dhamma Pala",
+      "center_id": "pala",
+      "location": "Bodh Gaya, India",
+      "type": "special",
+      "title": "Khoá thiền tại Dhamma Pala 2026",
+      "start_date": "",
+      "end_date": "",
+      "status": "open",
+      "notes": "Dữ liệu dự phòng — vui lòng kiểm tra ucenlist.org/course-schedule để biết tình trạng hiện tại. / Fallback data — check ucenlist.org/course-schedule for current status.",
+      "data_freshness": "fallback"
     }
   ]
 }

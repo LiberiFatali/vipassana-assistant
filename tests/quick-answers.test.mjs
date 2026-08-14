@@ -79,6 +79,15 @@ test("both centers when no single center is named", () => {
   assert.ok(out.includes("Dhamma Vutthi"));
 });
 
+test("pala center info renders location and schedule link without empty fields", () => {
+  const out = getQuickAnswer("Cho tôi biết về trung tâm Dhamma Pala", "vi");
+  assert.ok(out.includes("Dhamma Pala"), "pala center heading present");
+  assert.ok(out.includes("Bodh Gaya"), "location present");
+  assert.ok(!out.includes("Địa chỉ:"), "empty address field skipped");
+  assert.ok(!out.includes("Điện thoại:"), "empty phone field skipped");
+  assert.ok(out.includes("https://ucenlist.org/course-schedule"), "schedule link present");
+});
+
 test("bilingual definition in Vietnamese", () => {
   const out = getQuickAnswer("Vipassana là gì?", "vi");
   assert.ok(out.includes("Thiền Minh Sát"));
