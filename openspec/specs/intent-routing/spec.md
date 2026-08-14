@@ -6,7 +6,7 @@ The system classifies each user request as either knowledge-only (answerable fro
 ## Requirements
 
 ### Requirement: Knowledge-only vs live-data classification
-The system SHALL classify each user request as either knowledge-only (answerable from the static knowledge base) or requiring live course data, before choosing a response path. Classification SHALL support both English and Vietnamese.
+The system SHALL classify each user request as either knowledge-only (answerable from the static knowledge base) or requiring live course data, before choosing a response path. Classification SHALL support both English and Vietnamese. Mentions of special UCENLIST centers such as `pala` / "Dhamma Pala" / "Bodh Gaya" SHALL be treated as ambiguous surface forms that resolve to the live-data path (via the LLM classifier or the deterministic schedule matcher).
 
 #### Scenario: English knowledge-only question routes to fast path
 - **WHEN** the user asks "What is Vipassana?"
@@ -23,6 +23,10 @@ The system SHALL classify each user request as either knowledge-only (answerable
 #### Scenario: Ambiguous question falls back to the LLM classifier
 - **WHEN** keyword signals are ambiguous (e.g. a bare "khóa thiền" or "course" with no schedule/registration intent)
 - **THEN** the system consults the LLM classifier and routes to the tool path when the classifier is uncertain or fails.
+
+#### Scenario: Special-center mention routes to the live-data path
+- **WHEN** the user asks "khóa thiền tại Dhamma Pala" or "course at Dhamma Pala in India"
+- **THEN** the system routes the request to the live-data path and the deterministic schedule matcher answers it without an LLM call.
 
 ### Requirement: Conservative default on classifier failure
 If the LLM classifier is unavailable, times out, or errors, the system SHALL default to the tool path rather than the knowledge-only fast path. The classifier SHALL run on the fast model with a short, bounded timeout so classification latency is minimized.

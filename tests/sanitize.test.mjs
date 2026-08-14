@@ -45,6 +45,22 @@ test("domain gating: trusted vridhamma.org URL passes through", () => {
   assert.ok(TRUSTED_DOMAINS.test(url), "regex matches schedule.vridhamma.org");
 });
 
+test("domain gating: untrusted khaosat.me URL is stripped", () => {
+  const text = "Register: https://khaosat.me/i/ucenlist-dhamma-pala-2026";
+  const sanitized = sanitize_urls(text);
+  assert.doesNotMatch(sanitized, URL_RE, "khaosat.me is no longer trusted");
+  assert.ok(sanitized.includes("[🔒 Link removed"), "safety notice is shown");
+  const url = text.match(URL_RE)[0];
+  assert.ok(!TRUSTED_DOMAINS.test(url), "regex rejects khaosat.me");
+});
+
+test("domain gating: spoofed khaosat.me subdomain is stripped", () => {
+  const text = "Visit https://khaosat.me.evil.com/apply now";
+  assert.doesNotMatch(sanitize_urls(text), URL_RE);
+  const url = text.match(URL_RE)[0];
+  assert.ok(!TRUSTED_DOMAINS.test(url), "regex rejects the spoofed khaosat.me domain");
+});
+
 test("domain gating: untrusted domain is stripped", () => {
   const text = "Register at https://secure-meditation-vn.com/apply now!";
   assert.doesNotMatch(sanitize_urls(text), URL_RE);
@@ -166,7 +182,7 @@ test("smoke: fallback schedule JSON has courses with center_id and data_freshnes
   for (const course of data.courses) {
     assert.ok("center_id" in course, "course has center_id");
     assert.ok("data_freshness" in course, "course has data_freshness");
-    assert.ok(["virocana", "vutthi"].includes(course.center_id));
+    assert.ok(["virocana", "vutthi", "pala"].includes(course.center_id));
   }
 });
 

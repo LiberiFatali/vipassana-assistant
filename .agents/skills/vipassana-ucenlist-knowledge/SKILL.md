@@ -555,7 +555,7 @@ UCENLIST operates two main centers in Vietnam:
 - **Phone:** +84 942-255-050
 
 ### Dhamma Pala 2026 (Special location)
-- Registration link: https://khaosat.me/i/ucenlist-dhamma-pala-2026
+- Course schedule / registration: https://ucenlist.org/en/course-schedule
 
 ### How to Register for a Course
 1. Visit the Course Schedule page: https://ucenlist.org/en/course-schedule
@@ -585,7 +585,7 @@ UCENLIST vận hành hai trung tâm chính tại Việt Nam:
 - **Điện thoại:** +84 942-255-050
 
 ### Dhamma Pala 2026 (Địa điểm đặc biệt)
-- Link đăng ký: https://khaosat.me/i/ucenlist-dhamma-pala-2026
+- Lịch khóa học / đăng ký: https://ucenlist.org/course-schedule
 
 ### Cách Đăng Ký Khóa Học
 1. Truy cập trang Lịch khóa học: https://ucenlist.org/course-schedule
