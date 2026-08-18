@@ -20,7 +20,7 @@ A **bilingual (Vietnamese/English) AI chatbot agent** that answers questions abo
 
 ### Architecture
 
-```
+```text
 public/index.html                 ← static bilingual chat UI (dark theme, zero build step)
         │  POST /api/chat  { messages, conversationId }  →  { text }
         ▼
@@ -47,6 +47,7 @@ All LLM calls go through `lib/llm.js` — a thin OpenAI-compatible chat-completi
 ### The tools
 
 The `lib/tools/` modules are a zod-validated tool set:
+
 - `list_courses(center, language, course_type)` — scrapes `schedule.vridhamma.org` (and special announcements from `ucenlist.org/course-schedule`), returning courses with dates, status, and `apply_url`
 - `get_course_details(apply_url)` — fetches eligibility and special instructions for a specific course
 - `get_center_info(center)` — static contact/location info, always available offline
@@ -56,7 +57,7 @@ The `lib/tools/` modules are a zod-validated tool set:
 ## Course Concepts Demonstrated
 
 | Concept | How It's Used |
-|---|---|
+| --- | --- |
 | **Agent pattern** | Bilingual intent router + single-call composer; deterministic fast paths answer most queries with no LLM |
 | **Live-data integration** | `list_courses` scrapes VRI's schedule; deterministic renderer for windowed queries |
 | **Agent Skills** | `vipassana-ucenlist-knowledge` skill embedded as system prompt, sectioned by BM25 for the fast path |
@@ -83,7 +84,7 @@ This means even if the model hallucinates a phishing link or a prompt injection 
 The project ships a test suite run with `node --test tests/*` (15 files) plus ESLint, both enforced in CI on every pull request. Coverage includes:
 
 | Test file | What it checks |
-|---|---|
+| --- | --- |
 | `sanitize` | Trusted URLs pass; untrusted URLs are stripped |
 | `router` / `retrieval` | Bilingual intent routing (`kb` vs `tools`), language detection, BM25 classification margins |
 | `sections` | Fast-path prompt trimming to relevant knowledge sections |
@@ -110,7 +111,7 @@ Key invariants are pinned byte-for-byte in the tests: the system prompt's `langu
 
 ## Impact
 
-UCENLIST runs on volunteer effort. This agent reduces the information-access friction for Vietnamese meditators who may speak limited English, automating the repetitive Q&A burden while keeping human judgment in the loop for the parts that matter — the registration decision itself.
+UCENLIST runs on volunteer effort. This agent reduces the information-access friction for new and returning meditators, automating the repetitive Q&A burden while keeping human judgment in the loop for the parts that matter — the registration decision itself.
 
 The same pattern (knowledge skill + live-data scraper + bilingual routing + domain gating) is reusable for any small non-profit that has a static website, an external scheduling system, and a multilingual audience.
 
@@ -118,4 +119,4 @@ The same pattern (knowledge skill + live-data scraper + bilingual routing + doma
 
 ## Repository
 
-https://github.com/LiberiFatali/vipassana-assistant
+<https://github.com/LiberiFatali/vipassana-assistant>
