@@ -51,15 +51,15 @@ The repository root SHALL contain a single canonical agent-instructions file nam
 - **THEN** neither exists in the tracked file list, and the openspec workflow is documented under `.opencode/` (and mirrored in `.agent/`).
 
 ### Requirement: Pull-request CI runs tests and lint
-Every pull request targeting the `main` branch SHALL run the repository's unit test suite and its linter before the change can be merged, and a push to `main` SHALL run both as well.
+Every pull request targeting the `main` branch SHALL run the repository's unit test suite, its linter, and its typecheck before the change can be merged, and a push to `main` SHALL run all three as well.
 
-#### Scenario: PR runs tests and lint
+#### Scenario: PR runs tests, lint, and typecheck
 - **WHEN** a contributor opens or updates a pull request targeting `main`
-- **THEN** the CI workflow runs `npm test` and `npm run lint` against the PR's head, and the PR is blocked if either fails
+- **THEN** the CI workflow runs `npm test`, `npm run lint`, and `npm run typecheck` (`tsc --noEmit` at ES2023 strict) against the PR's head, and the PR is blocked if any fails
 
-#### Scenario: push to main runs tests and lint
+#### Scenario: push to main runs tests, lint, and typecheck
 - **WHEN** a commit is pushed directly to `main`
-- **THEN** the CI workflow runs `npm test` and `npm run lint` against the new head
+- **THEN** the CI workflow runs `npm test`, `npm run lint`, and `npm run typecheck` against the new head
 
 ### Requirement: README stays concise and defers internals
 `README.md` SHALL be a concise, human-readable overview of the project (purpose, features, quick start, run/test/deploy commands, security summary) and SHALL link to `AGENTS.md` for architecture, per-file layout, and other churn-prone internals rather than duplicating them.

@@ -25,4 +25,4 @@
 - [x] 4.1 Update `.github/workflows/ci.yml` to run `npm run typecheck` after `npm ci` / install, alongside `npm test` and `npm run lint`; block PR on failure
 - [x] 4.2 Run `npm run typecheck`, `npm test` (208 tests), `npm run lint` locally — all green
 - [x] 4.3 Verify no emitted artifacts (`git status` shows only `tsconfig.json`, `package.json`, `package-lock.json`, JSDoc edits, CI workflow); `vercel build` (or `vercel dev`) still works
-- [ ] 4.4 Open PR from `enable-typed-js-es2023` → `main`, confirm CI fails on intentional type error and passes when fixed
+- [x] 4.4 Open PR from `enable-typed-js-es2023` → `main`, confirm CI fails on intentional type error and passes when fixed
