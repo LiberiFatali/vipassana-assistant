@@ -32,6 +32,8 @@ import { getQuickAnswer } from "../lib/quick-answers.js";
 import { getOutOfScopeAnswer } from "../lib/out-of-scope.js";
 import { buildLiveScheduleContext, getScheduleAnswer } from "../lib/schedule-answers.js";
 import { answerCache } from "../lib/answer-cache.js";
+import { addCorsHeaders, isAllowedOrigin } from "../lib/http/cors.js";
+import { checkRateLimit } from "../lib/http/rate-limit.js";
 
 const MAX_MESSAGES = 20;
 const MAX_REQUEST_MESSAGES = 100;
@@ -42,72 +44,9 @@ const MAX_MESSAGE_LENGTH = 20000;
 // (single Gemini provider).
 const LLM_TIMEOUT_MS = 60000;
 
-// ─── CORS ────────────────────────────────────────────────────────────────────
-
-// Requests from the same deployment (null origin from file://, or the Vercel
-// domain) are always permitted. Origins not on this list receive a 403.
-// Adjust ALLOWED_ORIGINS to match your production domain(s).
-const ALLOWED_ORIGINS = [
-  // Allow same-origin (browser omits Origin on same-origin requests in some
-  // cases, so we also allow absent Origin in addCorsHeaders below).
-  // Pattern-match: any *.vercel.app subdomain + any custom domains you add.
-];
-
-const VERCEL_ORIGIN_RE = /^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)*\.vercel\.app$/i;
-
-function isAllowedOrigin(origin) {
-  if (!origin) return true; // same-origin (no Origin header) or server-to-server
-  if (VERCEL_ORIGIN_RE.test(origin)) return true;
-  if (ALLOWED_ORIGINS.includes(origin)) return true;
-  // Allow localhost in development
-  if (/^https?:\/\/localhost(:\d+)?$/.test(origin)) return true;
-  return false;
-}
-
-function addCorsHeaders(headers, origin) {
-  const allowedOrigin = isAllowedOrigin(origin) ? (origin || "*") : null;
-  if (allowedOrigin) {
-    headers["Access-Control-Allow-Origin"] = allowedOrigin;
-    headers["Access-Control-Allow-Methods"] = "POST, OPTIONS";
-    headers["Access-Control-Allow-Headers"] = "Content-Type, Accept";
-    headers["Vary"] = "Origin";
-  }
-  return headers;
-}
-
-// ─── Rate limiting ────────────────────────────────────────────────────────────
-
-// Simple in-process sliding-window rate limiter. Resets on cold start.
-// Vercel may run multiple warm instances, so this is a per-instance guard
-// rather than a global quota, but it still stops single-client floods.
-const RATE_LIMIT_MAX = 20; // requests per window
-const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
-
-const _rateLimitStore = new Map(); // ip → [timestamp, ...]
-
-function checkRateLimit(ip) {
-  // Only rate-limit when a real client IP is identifiable. In Vercel production
-  // `x-forwarded-for` is always injected by the edge; "unknown" means the
-  // request arrived without any proxy header (local dev, internal calls, tests).
-  if (!ip || ip === "unknown") return false;
-  const now = Date.now();
-  const cutoff = now - RATE_LIMIT_WINDOW_MS;
-  const timestamps = (_rateLimitStore.get(ip) || []).filter((t) => t > cutoff);
-  if (timestamps.length >= RATE_LIMIT_MAX) {
-    _rateLimitStore.set(ip, timestamps);
-    return true; // rate-limited
-  }
-  timestamps.push(now);
-  _rateLimitStore.set(ip, timestamps);
-  // Evict very old entries to prevent unbounded growth
-  if (_rateLimitStore.size > 5000) {
-    const oldCutoff = now - RATE_LIMIT_WINDOW_MS * 2;
-    for (const [k, ts] of _rateLimitStore) {
-      if (ts[ts.length - 1] < oldCutoff) _rateLimitStore.delete(k);
-    }
-  }
-  return false;
-}
+// CORS and rate-limiting are implemented in lib/http/* (extracted for
+// testability and to keep the handler slim). See lib/http/cors.js and
+// lib/http/rate-limit.js.
 
 const ERROR_RESPONSE_TEXT =
   "Xin lỗi, đã có lỗi xảy ra khi xử lý yêu cầu của bạn. Vui lòng thử lại sau. / " +
