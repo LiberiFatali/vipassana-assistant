@@ -53,7 +53,7 @@ async function serveStatic(req, res, pathname) {
   res.end(stat);
 }
 
-const server = createServer(async (req, res) => {
+const server = createServer(async (/** @type {any} */ req, /** @type {any} */ res) => {
   const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
 
   if (url.pathname === "/api/chat" && req.method === "POST") {
@@ -74,7 +74,7 @@ const server = createServer(async (req, res) => {
     try {
       const request = new Request(url, {
         method: req.method,
-        headers,
+        headers: /** @type {any} */ (headers),
         body,
       });
       const response = await POST(request);

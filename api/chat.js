@@ -18,7 +18,7 @@ import { KNOWLEDGE_SYSTEM_PROMPT } from "../lib/system-prompt.js";
 import { loadKnowledgeBase } from "../lib/knowledge.js";
 import { sanitize_urls } from "../lib/sanitize.js";
 import { classifyIntent } from "../lib/router.js";
-import { detectLanguage, normalize } from "../lib/router.js";
+import { detectLanguage, normalize } from "../lib/lang.js";
 import {
   hashQuestion,
   logError,
@@ -295,18 +295,19 @@ async function generateAgentResponse(messages) {
     return done("out-of-scope", sanitize_urls(outOfScope));
   }
 
+  /** @type {{kind:string, lang:string}} */
   let route;
   try {
     route = await classifyIntent(userText);
     logInfo("route.decision", { route: route.kind, lang: route.lang });
   } catch (err) {
-    logError("route.error", { ...safeErr(err) });
-    route = { kind: "tools" };
+    logError("route.error", { .../** @type {any} */ (safeErr(err) || {}) });
+    route = { kind: "tools", lang: detectLanguage(userText) };
   }
 
   if (route.kind === "kb") {
     // 1) Deterministic structured answers — no LLM call at all.
-    const quick = getQuickAnswer(userText, route.lang);
+    const quick = getQuickAnswer(userText, /** @type {import("../lib/lang.js").Lang} */ (route.lang));
     if (quick !== null) {
       return done("quick", sanitize_urls(quick));
     }
@@ -319,7 +320,7 @@ async function generateAgentResponse(messages) {
     }
 
     // 3) Fast path: one call, trimmed knowledge context, no tools attached.
-    const system = buildFastPathSystemPrompt(userText, route.lang);
+    const system = buildFastPathSystemPrompt(userText, /** @type {import("../lib/lang.js").Lang} */ (route.lang));
     const apiMessages = [{ role: "system", content: system }, ...messages];
     try {
       const content = await callFastPath(apiMessages);
@@ -338,7 +339,7 @@ async function generateAgentResponse(messages) {
   }
 
   // Live-data path (Pure Composer mode): pre-fetch schedule context server-side and call LLM once.
-  const schedule = await getScheduleAnswer(userText, route.lang);
+  const schedule = await getScheduleAnswer(userText, /** @type {import("../lib/lang.js").Lang} */ (route.lang));
   if (schedule !== null) {
     return done("schedule", sanitize_urls(schedule));
   }
@@ -346,12 +347,12 @@ async function generateAgentResponse(messages) {
   // KB fallback: if the question has a deterministic quick-answer (e.g. center
   // address/info detected via BM25) return it immediately — prevents empty
   // answers when the router misclassifies a center-info question as tools.
-  const quickFallback = getQuickAnswer(userText, route.lang);
+  const quickFallback = getQuickAnswer(userText, /** @type {import("../lib/lang.js").Lang} */ (route.lang));
   if (quickFallback !== null) {
     return done("quick-fallback", sanitize_urls(quickFallback));
   }
 
-  const liveContext = await buildLiveScheduleContext(userText, route.lang);
+  const liveContext = await buildLiveScheduleContext(userText, /** @type {import("../lib/lang.js").Lang} */ (route.lang));
   const baseSystem = KNOWLEDGE_SYSTEM_PROMPT.replace("{knowledge_base}", loadKnowledgeBase());
   const system = `${baseSystem}\n\n${liveContext}`;
   const apiMessages = [{ role: "system", content: system }, ...messages];
