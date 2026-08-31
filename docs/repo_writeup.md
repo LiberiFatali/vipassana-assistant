@@ -81,7 +81,7 @@ This means even if the model hallucinates a phishing link or a prompt injection 
 
 ## Evaluation
 
-The project ships a test suite run with `node --test tests/*` (15 files) plus ESLint, both enforced in CI on every pull request. Coverage includes:
+The project ships a test suite run with `node --test tests/*` (15 files, 208 tests) plus ESLint and TypeScript type checking (`tsc --noEmit`), all enforced in CI on every push and pull request. Coverage includes:
 
 | Test file | What it checks |
 | --- | --- |
@@ -91,7 +91,9 @@ The project ships a test suite run with `node --test tests/*` (15 files) plus ES
 | `quick-answers` | Deterministic center/FAQ answers (no LLM), `language="vi"` / `language="en"` |
 | `schedule-answers` | Windowed schedule queries ("this month", "next week") render correct dates/status |
 | `chat-path` | End-to-end request flow: sanitization, fallback warning, human-in-the-loop phrasing |
-| `markdown`, `log`, `answer-cache`, `vri-schedule`, `ucenlist-schedule`, `llm` | Renderer escaping, structured logging, cache TTL, scraper parsing, LLM retry/backoff |
+| `out-of-scope` | Out-of-scope domain gating ("meditation group/club" deterministic deflection) |
+| `log` / `logging-path` | Structured JSON-line logging, request correlation IDs, question hashing, preview truncation |
+| `markdown`, `answer-cache`, `vri-schedule`, `ucenlist-schedule`, `llm` | Renderer escaping, cache TTL, scraper parsing (VRI + UCENLIST announcements), LLM retry/backoff |
 
 Key invariants are pinned byte-for-byte in the tests: the system prompt's `language="vi"` / `language="en"` routing, the `⚠️` fallback warning when `data_freshness = "fallback"`, "NEVER fill out" phrasing, and the trusted-domain regex.
 
@@ -99,13 +101,13 @@ Key invariants are pinned byte-for-byte in the tests: the system prompt's `langu
 
 ## Tech Stack
 
-- **Node.js ≥ 20** (ESM) — serverless functions on Vercel (region `sin1`, 60s budget)
+- **Node.js ≥ 20** (ESM, typed JS with TypeScript/ES2023 `tsc --noEmit`) — serverless functions on Vercel (region `sin1`, 60s budget)
 - **Model:** Google Gemini `gemini-3.1-flash-lite` via OpenAI-compatible chat-completions (configurable via `AGENT_MODEL`; free AI Studio tier, no credit card)
 - **Scraping:** `cheerio` (VRI Drupal Views tables + UCENLIST Odoo announcements)
 - **Retrieval:** `wink-bm25-text-search` — bilingual diacritic-insensitive BM25 over knowledge sections and live-data exemplars
 - **Validation:** `zod` for tool input schemas
 - **Frontend:** zero-dependency static HTML + custom markdown renderer, no build step
-- **CI/CD:** GitHub Actions (test + lint) gating Vercel production deploys
+- **CI/CD:** GitHub Actions (test + lint + typecheck) gating automated Vercel production deploys via workflow runs
 
 ---
 
