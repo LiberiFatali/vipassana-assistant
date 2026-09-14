@@ -18,9 +18,16 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main'
     steps:
+      # NOTE: this workflow runs with secrets (VERCEL_TOKEN) and executes
+      # untrusted build scripts (npm ci / vercel build). Checking out
+      # github.event.workflow_run.head_sha here would execute PR-controlled
+      # code in a privileged context (actions/untrusted-checkout). The job is
+      # already gated to push events on main, so check out the trusted main
+      # branch tip instead of the attacker-influenced SHA.
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: main
+          persist-credentials: false
       - uses: actions/setup-node@v7
         with:
           node-version: 20

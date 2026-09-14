@@ -145,8 +145,15 @@ test("links: rendered anchor is not re-linked by the bare-URL pass", () => {
 
 test("safety: <script> is escaped, not executable", () => {
   const html = renderMarkdown("hi <script>alert(1)</script>");
-  assert.doesNotMatch(html, /<script>/);
-  assert.match(html, /&lt;script&gt;/);
+  // Case-insensitive: browsers treat <SCRIPT> the same as <script>.
+  assert.doesNotMatch(html, /<script>/i);
+  assert.match(html, /&lt;script&gt;/i);
+});
+
+test("safety: upper-case <SCRIPT> is escaped, not executable", () => {
+  const html = renderMarkdown("hi <SCRIPT>alert(1)</SCRIPT>");
+  assert.doesNotMatch(html, /<script>/i);
+  assert.match(html, /&lt;script&gt;/i);
 });
 
 test("safety: ampersand in text is escaped", () => {
@@ -155,8 +162,8 @@ test("safety: ampersand in text is escaped", () => {
 
 test("safety: html in link text is escaped", () => {
   const html = renderMarkdown('[<img src=x onerror=alert(1)>](https://ucenlist.org)');
-  assert.doesNotMatch(html, /<img/);
-  assert.match(html, /&lt;img/);
+  assert.doesNotMatch(html, /<img/i);
+  assert.match(html, /&lt;img/i);
 });
 
 test("safety: javascript: URL never becomes an anchor", () => {

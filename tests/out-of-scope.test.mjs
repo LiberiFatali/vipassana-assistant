@@ -76,12 +76,12 @@ test("oos: 'hỏi thiền' (ask about meditation) does not fire", () => {
 test("oos: answer is language-aware and references the contact email", () => {
   const vi = getOutOfScopeAnswer("nhóm thiền", "vi");
   assert.ok(vi, "Vietnamese fallback returned");
-  assert.ok(vi.includes("info@ucenlist.org"), "Vietnamese fallback mentions the email");
+  assert.match(vi, /info@ucenlist\.org/, "Vietnamese fallback mentions the email");
   assert.ok(vi.includes("ban quản trị"), "Vietnamese fallback mentions the admin team");
 
   const en = getOutOfScopeAnswer("meditation group", "en");
   assert.ok(en, "English fallback returned");
-  assert.ok(en.includes("info@ucenlist.org"), "English fallback mentions the email");
+  assert.match(en, /info@ucenlist\.org/, "English fallback mentions the email");
   assert.ok(en.toLowerCase().includes("admin team"), "English fallback mentions the admin team");
 });
 

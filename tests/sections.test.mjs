@@ -84,7 +84,7 @@ test("fast-path prompt: preserves security and handoff instructions", () => {
   assert.ok(fast.includes("⚠️"), "fallback warning phrasing is kept");
   assert.ok(fast.includes("NEVER fill out"), "HITL registration rule is kept");
   assert.ok(fast.includes("Please click the link"), "HITL handoff phrase is kept");
-  assert.ok(fast.toLowerCase().includes("vridhamma.org"), "trusted-domain rule is kept");
+  assert.match(fast, /vridhamma\.org/i, "trusted-domain rule is kept");
 });
 
 test("fast-path prompt: carries the bilingual language-parameter rule", () => {

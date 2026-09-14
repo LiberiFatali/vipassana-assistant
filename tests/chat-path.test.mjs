@@ -102,7 +102,7 @@ test("fast path: knowledge-only question sends no tools and a trimmed prompt", a
   assert.equal(requests.length, 1, "single LLM call on the fast path");
 
   const { url, body } = requests[0];
-  assert.ok(url.includes(GEMINI_URL), "fast path hits the Gemini provider");
+  assert.equal(url, GEMINI_URL, "fast path hits the Gemini provider");
   assert.equal(body.model, "test-model", "AGENT_MODEL override is used");
   assert.equal(body.tools, undefined, "no tools attached on the fast path");
   assert.equal(body.tool_choice, undefined, "no tool_choice on the fast path");
@@ -123,7 +123,7 @@ test("tool path: live-schedule question uses pure composer with pre-fetched sche
   assert.equal(requests.length, 1, "single composer call when live context is injected");
 
   const { url, body } = requests[0];
-  assert.ok(url.includes(GEMINI_URL), "composer path hits the Gemini provider");
+  assert.equal(url, GEMINI_URL, "composer path hits the Gemini provider");
   assert.equal(body.tools, undefined, "no tools attached on pure composer path");
   assert.equal(body.tool_choice, undefined, "no tool_choice on pure composer path");
 
@@ -140,7 +140,7 @@ test("ambiguous question flows through the LLM classifier before answering", asy
   // The stub's classifier response ("A curated answer.") does not start with
   // TOOLS, so the router settles on the KB fast path: classifier call + answer.
   assert.equal(requests.length, 2, "classifier call then fast-path answer");
-  assert.ok(requests[0].url.includes(GEMINI_URL), "classifier hits Gemini");
+  assert.equal(requests[0].url, GEMINI_URL, "classifier hits Gemini");
 });
 
 test("deterministic address question makes no LLM call", async () => {
@@ -157,7 +157,7 @@ test("out-of-scope question returns the static fallback with no LLM call", async
   const res = await post([{ role: "user", content: "Cho tôi hỏi nhóm thiền ở Hà Nội?" }]);
   const data = await res.json();
 
-  assert.ok(data.text.includes("info@ucenlist.org"), "fallback mentions the contact email");
+  assert.match(data.text, /info@ucenlist\.org/, "fallback mentions the contact email");
   assert.ok(data.text.includes("ban quản trị"), "fallback mentions the admin team");
   assert.equal(requests.length, 0, "no LLM call for an out-of-scope question");
 });
@@ -185,7 +185,15 @@ test("repeated generative question is served from the answer cache", async () =>
 test("fallback: Gemini failure returns the static bilingual error without a fallback provider", async () => {
   answerCache.clear();
   requests.length = 0;
-  stubStatusFor = (url) => (url.includes("generativelanguage") ? 500 : null);
+  // Parse the request host instead of substring-matching the URL
+  // (see js/incomplete-url-substring-sanitization).
+  stubStatusFor = (url) => {
+    try {
+      return new URL(url).hostname === "generativelanguage.googleapis.com" ? 500 : null;
+    } catch {
+      return null;
+    }
+  };
   try {
     const res = await post([
       { role: "user", content: "What is the daily timetable during a 10-day course?" },
@@ -194,7 +202,7 @@ test("fallback: Gemini failure returns the static bilingual error without a fall
 
     assert.ok(data.text.includes("Xin lỗi"), "bilingual error text returned");
     assert.equal(requests.length, 2, "one fast-path attempt plus its once-retry, no fallback provider");
-    assert.ok(requests.every((r) => r.url.includes(GEMINI_URL)), "all requests hit Gemini only");
+    assert.ok(requests.every((r) => r.url === GEMINI_URL), "all requests hit Gemini only");
   } finally {
     stubStatusFor = () => null;
   }

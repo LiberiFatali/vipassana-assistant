@@ -12,6 +12,7 @@ import {
   formatScheduleAnswer,
   getScheduleAnswer,
 } from "../lib/schedule-answers.js";
+import { hasExactUrl, hasHost } from "./url-assert.mjs";
 
 const NOW = new Date("2026-08-09T12:00:00");
 
@@ -169,7 +170,7 @@ test("formatScheduleAnswer lists windowed courses with dates and apply links", (
   assert.ok(!out.includes("2026-07-01") && !out.includes("01/07/2026"), "past course excluded");
   assert.ok(!out.includes("satipatthana"), "out-of-window course excluded");
   assert.ok(out.includes("Đăng ký"), "apply label present");
-  assert.ok(out.includes("schedule.vridhamma.org"), "apply URL survives");
+  assert.ok(hasHost(out, "schedule.vridhamma.org"), "apply URL survives");
 });
 
 test("registration reminder answer includes the no-records caveat", () => {
@@ -186,7 +187,10 @@ test("empty schedule produces a graceful empty state", () => {
   const q = detectScheduleIntent("Lịch thiền cuối tháng này ở Hà Nội", NOW);
   const out = formatScheduleAnswer(q, []);
   assert.ok(out.includes("chưa có khóa thiền nào"), "empty state message");
-  assert.ok(out.includes("schedule.vridhamma.org/vi/courses/virocana"), "schedule link offered");
+  assert.ok(
+    hasExactUrl(out, "https://schedule.vridhamma.org/vi/courses/virocana"),
+    "schedule link offered"
+  );
 });
 
 test("default upcoming answer labels the window and lists future courses", () => {
@@ -204,8 +208,11 @@ test("dateless pala announcement appears in the default upcoming list", () => {
   const out = formatScheduleAnswer(q, FIXTURE);
   assert.ok(out.includes("Dhamma Pala"), "pala center heading present");
   assert.ok(out.includes("Khoá thiền tại Dhamma Pala 2026"), "announcement title rendered");
-  assert.ok(out.includes("ucenlist.org/course-schedule"), "only the official schedule link is shown");
-  assert.ok(!out.includes("khaosat.me"), "no khaosat.me link anywhere");
+  assert.ok(
+    hasExactUrl(out, "https://ucenlist.org/course-schedule"),
+    "only the official schedule link is shown"
+  );
+  assert.ok(!hasHost(out, "khaosat.me"), "no khaosat.me link anywhere");
   assert.ok(!out.includes("—  —"), "no empty date range rendered");
 });
 
@@ -237,15 +244,18 @@ test("pala announcement renders even when the dated-course cap is reached", () =
   const out = formatScheduleAnswer(q, many);
   assert.ok(out.includes("…và "), "cap reached for dated courses");
   assert.ok(out.includes("Khoá thiền tại Dhamma Pala 2026"), "announcement still listed past the cap");
-  assert.ok(out.includes("ucenlist.org/course-schedule"), "official schedule link present");
-  assert.ok(!out.includes("khaosat.me"), "no khaosat.me link anywhere");
+  assert.ok(
+    hasExactUrl(out, "https://ucenlist.org/course-schedule"),
+    "official schedule link present"
+  );
+  assert.ok(!hasHost(out, "khaosat.me"), "no khaosat.me link anywhere");
 });
 
 test("dateless pala announcement is excluded from dated window queries", () => {
   const q = detectScheduleIntent("Lịch thiền cuối tháng này ở Hà Nội", NOW);
   const out = formatScheduleAnswer(q, FIXTURE);
   assert.ok(!out.includes("Dhamma Pala"), "no pala entry in a dated window");
-  assert.ok(!out.includes("ucenlist.org"), "no ucenlist schedule link in a Hanoi-only dated window");
+  assert.ok(!hasHost(out, "ucenlist.org"), "no ucenlist schedule link in a Hanoi-only dated window");
 });
 
 test("targeted pala query detects the pala center and renders the announcement", () => {
@@ -254,8 +264,11 @@ test("targeted pala query detects the pala center and renders the announcement",
   assert.ok(q.centers.has("pala"), "pala center detected");
   const out = formatScheduleAnswer(q, FIXTURE);
   assert.ok(out.includes("Khoá thiền tại Dhamma Pala 2026"), "announcement listed for targeted query");
-  assert.ok(out.includes("ucenlist.org/course-schedule"), "official schedule link present");
-  assert.ok(!out.includes("khaosat.me"), "no khaosat.me link anywhere");
+  assert.ok(
+    hasExactUrl(out, "https://ucenlist.org/course-schedule"),
+    "official schedule link present"
+  );
+  assert.ok(!hasHost(out, "khaosat.me"), "no khaosat.me link anywhere");
 });
 
 test("unknown-id announcement renders in the default upcoming list", () => {
@@ -277,7 +290,7 @@ test("unknown-id announcement renders in the default upcoming list", () => {
   );
   assert.ok(out.includes("Khoá thiền đặc biệt 2027"), "unknown-id announcement rendered");
   assert.ok(out.includes("Dhamma Pala"), "graceful heading fallback to course.center");
-  assert.ok(!out.includes("khaosat.me"), "no untrusted link anywhere");
+  assert.ok(!hasHost(out, "khaosat.me"), "no untrusted link anywhere");
 });
 
 test("unknown-id announcement is excluded from dated window queries", () => {

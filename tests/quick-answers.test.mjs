@@ -9,19 +9,20 @@ import { test } from "node:test";
 
 import { getQuickAnswer } from "../lib/quick-answers.js";
 import { sanitize_urls } from "../lib/sanitize.js";
+import { hasExactUrl, hasHost } from "./url-assert.mjs";
 
 test("virocana address in Vietnamese", () => {
   const out = getQuickAnswer("Địa chỉ trung tâm Hà Nội?", "vi");
   assert.ok(out.includes("Dhamma Virocana"));
   assert.ok(out.includes("Số 15-17 ngõ Sala"));
-  assert.ok(out.includes("https://schedule.vridhamma.org/vi/courses/virocana"));
+  assert.ok(hasExactUrl(out, "https://schedule.vridhamma.org/vi/courses/virocana"));
 });
 
 test("vutthi address in English", () => {
   const out = getQuickAnswer("What is the address of Dhamma Vutthi?", "en");
   assert.ok(out.includes("Dhamma Vutthi"));
   assert.ok(out.includes("112, đường 628"));
-  assert.ok(out.includes("https://schedule.vridhamma.org/courses/vutthi"));
+  assert.ok(hasExactUrl(out, "https://schedule.vridhamma.org/courses/vutthi"));
 });
 
 test("vutthi directions query in Vietnamese — explicit chỉ đường", () => {
@@ -65,12 +66,12 @@ test("vutthi phone in Vietnamese", () => {
 
 test("virocana email in Vietnamese", () => {
   const out = getQuickAnswer("Cho tôi xin email liên hệ Dhamma Virocana", "vi");
-  assert.ok(out.includes("contact.virocana@vridhamma.org"));
+  assert.match(out, /contact\.virocana@vridhamma\.org/);
 });
 
 test("website query returns center website", () => {
   const out = getQuickAnswer("website của trung tâm Vutthi", "vi");
-  assert.ok(out.includes("https://vutthi.vridhamma.org/vi"));
+  assert.ok(hasExactUrl(out, "https://vutthi.vridhamma.org/vi"));
 });
 
 test("both centers when no single center is named", () => {
@@ -85,7 +86,7 @@ test("pala center info renders location and schedule link without empty fields",
   assert.ok(out.includes("Bodh Gaya"), "location present");
   assert.ok(!out.includes("Địa chỉ:"), "empty address field skipped");
   assert.ok(!out.includes("Điện thoại:"), "empty phone field skipped");
-  assert.ok(out.includes("https://ucenlist.org/course-schedule"), "schedule link present");
+  assert.ok(hasExactUrl(out, "https://ucenlist.org/course-schedule"), "schedule link present");
 });
 
 test("bilingual definition in Vietnamese", () => {
@@ -140,10 +141,10 @@ test("quick-answer URLs survive sanitize_urls (trusted domains only)", () => {
   const out = getQuickAnswer("Địa chỉ trung tâm Hà Nội?", "vi");
   const sanitized = sanitize_urls(out);
   assert.ok(!sanitized.includes("[🔒"), "no untrusted link replacement");
-  assert.ok(sanitized.includes("https://schedule.vridhamma.org/vi/courses/virocana"));
+  assert.ok(hasExactUrl(sanitized, "https://schedule.vridhamma.org/vi/courses/virocana"));
 });
 
 test("address answers never include the untrusted maps_url", () => {
   const out = getQuickAnswer("Địa chỉ trung tâm Hà Nội?", "vi");
-  assert.ok(!out.includes("maps.app.goo.gl"));
+  assert.ok(!hasHost(out, "maps.app.goo.gl"));
 });
