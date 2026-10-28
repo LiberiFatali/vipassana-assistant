@@ -2,7 +2,9 @@
 
 ## Purpose
 The Vipassana UCENLIST Chatbot Agent integrates the `vipassana-ucenlist-knowledge` skill and `vipassana-course-discovery-mcp` server to assist users with information regarding Vipassana meditation courses, rules, centers, and live schedules in Vietnam.
+
 ## Requirements
+
 ### Requirement: Bilingual Knowledge Retrieval
 The agent SHALL retrieve static information (Rules, Timetable, About S.N. Goenka, UCENLIST) in English or Vietnamese from the dynamically loaded knowledge skill. When the intent router classifies a request as knowledge-only, the agent SHALL answer it on the fast path: a single model call with the relevant knowledge sections in the detected language and no tool definitions attached.
 
@@ -28,10 +30,10 @@ The agent SHALL query upcoming course schedules at Dhamma Virocana (Hanoi) and D
 - **THEN** the agent displays the courses with the prominent warning: "⚠️ Note: These are approximate schedule dates from our fallback data. Please verify the actual dates at https://schedule.vridhamma.org before making plans."
 
 ### Requirement: Safe Domain Gating
-To protect users from phishing or malicious redirections, the agent SHALL gate external links and refuse to direct users to unauthorized domains. Only `ucenlist.org` and `*.vridhamma.org` URLs may reach the user — enforced both by system-prompt instruction and by the `sanitize_urls()` post-processor on every response, including fast-path responses.
+To protect users from phishing or malicious redirections, the agent SHALL gate external links and refuse to direct users to unauthorized domains. Only `ucenlist.org`, `*.vridhamma.org`, and `zalo.me` URLs may reach the user — enforced both by system-prompt instruction and by the `sanitize_urls()` post-processor on every response, including fast-path responses. `zalo.me` is authorized for official UCENLIST community and group sitting coordination links (e.g. `https://zalo.me/g/udknri223`).
 
 #### Scenario: Blocking unauthorized external links (Hallucinated Links/Slopsquatting)
-- **WHEN** the agent would output a URL whose domain does not match `*.vridhamma.org` or `ucenlist.org`
+- **WHEN** the agent would output a URL whose domain does not match `*.vridhamma.org`, `ucenlist.org`, or `zalo.me`
 - **THEN** `sanitize_urls()` strips the link
 - **AND** only official website addresses (`https://ucenlist.org` or `https://schedule.vridhamma.org`) are provided.
 
@@ -39,8 +41,13 @@ To protect users from phishing or malicious redirections, the agent SHALL gate e
 - **WHEN** the agent renders a special UCENLIST course announcement (e.g. "Khoá thiền tại Dhamma Pala 2026")
 - **THEN** the announcement is shown with its title and status, with no external registration link — the only link offered is the official `https://ucenlist.org/en/course-schedule` (or language-appropriate variant) from the schedule footer.
 
+#### Scenario: Official Zalo group sitting link passes the gate
+- **WHEN** the agent outputs an official Zalo community link such as `https://zalo.me/g/udknri223`
+- **THEN** `sanitize_urls()` keeps the link
+- **AND** client-side markdown rendering renders it as an anchor.
+
 #### Scenario: Spoofed subdomain is still stripped
-- **WHEN** the agent would output a URL that spoofs a trusted suffix, e.g. `https://khaosat.me.evil.com/apply`
+- **WHEN** the agent would output a URL that spoofs a trusted suffix, e.g. `https://zalo.me.evil.com/apply` or `https://khaosat.me.evil.com/apply`
 - **THEN** `sanitize_urls()` strips the link because the domain match is suffix-scoped.
 
 #### Scenario: Prompt Injection and Hallucination Defense
@@ -66,7 +73,7 @@ The system SHALL ensure the agent uses the correct tools and matching parameters
 - **AND** displays the dates and response in Vietnamese.
 
 ### Requirement: Dynamic Knowledge Base Integration
-The chatbot system SHALL dynamically load the `SKILL.md` content from the `vipassana-ucenlist-knowledge` skill and integrate it into the prompt context. The system SHALL section the knowledge base at load time and, on the knowledge-only fast path, inject only the sections relevant to the request (plus the always-on chatbot-guide sections) in the detected language instead of the full document. The tool path SHALL continue to receive the complete knowledge base.
+The chatbot system SHALL dynamically load the knowledge base content from the `vipassana-ucenlist-knowledge` skill directory (loading `SKILL.md` and any auxiliary `.md` topic documents) and integrate it into the prompt context. The system SHALL section the combined knowledge base at load time and, on the knowledge-only fast path, inject only the sections relevant to the request (plus the always-on chatbot-guide sections) in the detected language instead of the full document. The tool path SHALL continue to receive the complete knowledge base.
 
 #### Scenario: Answering meditation center address queries
 - **WHEN** the user asks "Where is the Vipassana Hanoi center?" or "Địa chỉ trung tâm thiền Hà Nội ở đâu?"
@@ -74,7 +81,11 @@ The chatbot system SHALL dynamically load the `SKILL.md` content from the `vipas
 
 #### Scenario: Answering course discipline rules queries
 - **WHEN** the user asks about the 10-day course rules or daily timetable
-- **THEN** the system returns details (e.g. 5 precepts, noble silence, wake-up at 4:00 AM) retrieved from the relevant section of the dynamically loaded `SKILL.md`.
+- **THEN** the system returns details (e.g. 5 precepts, noble silence, wake-up at 4:00 AM) retrieved from the relevant section of the dynamically loaded knowledge base.
+
+#### Scenario: Answering group sitting queries
+- **WHEN** the user asks about offline group sittings or group meditation in Hanoi ("thiền chung offline", "nhóm thiền chung Hà Nội", "group sitting Hanoi")
+- **THEN** the system returns information about UCENLIST Hanoi's offline group sittings with assistant teachers and provides the official Zalo group link.
 
 ### Requirement: Standard Non-Streaming Endpoint & Response Contract
 The public surface of the chatbot system SHALL be a single non-streaming endpoint `POST /api/chat` returning JSON `{ text: string }` with `Content-Type: application/json`. Streaming response negotiation (`Accept: text/event-stream` or `?stream=1`) SHALL NOT be supported. Every response text SHALL pass through `sanitize_urls()` post-processing at a single trustworthy point prior to JSON serialization.
@@ -86,4 +97,3 @@ The public surface of the chatbot system SHALL be a single non-streaming endpoin
 #### Scenario: Client requesting event-stream header or stream query param
 - **WHEN** a client sends a `POST /api/chat` request with `Accept: text/event-stream` or `?stream=1`
 - **THEN** the server treats the request as a standard JSON request and returns a standard JSON object `{ "text": "..." }`.
-

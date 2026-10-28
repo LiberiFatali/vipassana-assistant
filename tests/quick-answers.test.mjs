@@ -129,6 +129,23 @@ test("eligibility FAQ in Vietnamese and English", () => {
   assert.ok(getQuickAnswer("Điều kiện tham gia là gì?", "vi").includes("sức khỏe"));
 });
 
+test("group sitting FAQ in Vietnamese and English", () => {
+  const vi = getQuickAnswer("Có thiền chung ở Hà Nội không?", "vi");
+  assert.ok(vi.includes("Dhamma Virocana"));
+  assert.ok(vi.includes("https://zalo.me/g/udknri223"));
+
+  const en = getQuickAnswer("Is there any group sitting in Hanoi?", "en");
+  assert.ok(en.includes("Dhamma Virocana"));
+  assert.ok(en.includes("https://zalo.me/g/udknri223"));
+});
+
+test("group sitting answer survives sanitize_urls with trusted zalo.me link", () => {
+  const out = getQuickAnswer("thiền chung offline", "vi");
+  const sanitized = sanitize_urls(out);
+  assert.ok(!sanitized.includes("[🔒"), "no untrusted link replacement for zalo.me");
+  assert.ok(sanitized.includes("https://zalo.me/g/udknri223"));
+});
+
 test("non-match returns null (falls through to LLM)", () => {
   assert.equal(getQuickAnswer("Thời khóa biểu hằng ngày như thế nào?", "vi"), null);
   assert.equal(getQuickAnswer("What are the benefits of meditation?", "en"), null);

@@ -15,7 +15,7 @@
  * trusted https? URLs.
  */
 
-export const TRUSTED_DOMAIN_RE = /^https?:\/\/([a-zA-Z0-9-]+\.)*(vridhamma\.org|ucenlist\.org)([/?#]|$)/;
+export const TRUSTED_DOMAIN_RE = /^https?:\/\/([a-zA-Z0-9-]+\.)*(vridhamma\.org|ucenlist\.org|zalo\.me)([/?#]|$)/;
 
 const LINK_REMOVED_NOTICE =
   "[🔒 Link removed: only official ucenlist.org and vridhamma.org links are shared]";

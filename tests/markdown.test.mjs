@@ -107,13 +107,23 @@ test("links: trusted vridhamma.org link with query becomes an anchor", () => {
   assert.ok(!html.includes("link-removed"), "trusted link must not be flagged");
 });
 
-test("links: TRUSTED_DOMAIN_RE accepts ucenlist.org and *.vridhamma.org", () => {
+test("links: trusted zalo.me link becomes an anchor", () => {
+  const html = renderMarkdown("[zalo](https://zalo.me/g/udknri223)");
+  assert.match(
+    html,
+    /<a href="https:\/\/zalo\.me\/g\/udknri223" target="_blank" rel="noopener noreferrer">zalo<\/a>/
+  );
+});
+
+test("links: TRUSTED_DOMAIN_RE accepts ucenlist.org, *.vridhamma.org, and zalo.me", () => {
   for (const url of [
     "https://ucenlist.org",
     "https://www.ucenlist.org/en",
     "https://schedule.vridhamma.org/vi/courses/virocana",
     "https://virocana.vridhamma.org/vi",
     "http://schedule.vridhamma.org",
+    "https://zalo.me/g/udknri223",
+    "https://chat.zalo.me",
   ]) {
     assert.ok(TRUSTED_DOMAIN_RE.test(url), `should accept ${url}`);
   }

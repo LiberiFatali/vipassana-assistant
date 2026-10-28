@@ -46,6 +46,20 @@ test("domain gating: trusted vridhamma.org URL passes through", () => {
   assert.ok(TRUSTED_DOMAINS.test(url), "regex matches schedule.vridhamma.org");
 });
 
+test("domain gating: trusted zalo.me URL passes through", () => {
+  const text = "Join Zalo group: https://zalo.me/g/udknri223";
+  assert.match(sanitize_urls(text), URL_RE);
+  const url = text.match(URL_RE)[0];
+  assert.ok(TRUSTED_DOMAINS.test(url), "regex matches zalo.me");
+});
+
+test("domain gating: spoofed zalo.me subdomain is stripped", () => {
+  const text = "Join https://zalo.me.evil.com/fake";
+  assert.doesNotMatch(sanitize_urls(text), URL_RE);
+  const url = text.match(URL_RE)[0];
+  assert.ok(!TRUSTED_DOMAINS.test(url), "regex rejects the spoofed zalo.me domain");
+});
+
 test("domain gating: untrusted khaosat.me URL is stripped", () => {
   const text = "Register: https://khaosat.me/i/ucenlist-dhamma-pala-2026";
   const sanitized = sanitize_urls(text);

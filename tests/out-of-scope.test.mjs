@@ -60,6 +60,12 @@ test("oos: group-registration phrasing does not fire", () => {
   assert.equal(detectOutOfScope("đăng ký theo nhóm"), false);
 });
 
+test("oos: group sitting (thiền chung) does not fire", () => {
+  assert.equal(detectOutOfScope("nhóm thiền chung ở Hà Nội"), false);
+  assert.equal(detectOutOfScope("thiền chung offline"), false);
+  assert.equal(detectOutOfScope("group sitting in Hanoi"), false);
+});
+
 test("oos: chitchat does not fire", () => {
   assert.equal(detectOutOfScope("Tell me about yourself"), false);
   assert.equal(detectOutOfScope("bạn khỏe không?"), false);

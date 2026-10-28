@@ -26,6 +26,7 @@ test("parse: SKILL.md yields all numbered EN/VI sections", () => {
   assert.ok(ids.includes("1") && ids.includes("1-VI"), "both EN and VI section 1 exist");
   assert.ok(ids.includes("13"), "English section 13 exists");
   assert.ok(!ids.includes("13-VI"), "no VI variant for section 13");
+  assert.ok(ids.includes("14") && ids.includes("14-VI"), "both EN and VI section 14 exist");
 });
 
 // ─── Section selection ───────────────────────────────────────────────────────
@@ -48,6 +49,19 @@ test("select: Vietnamese discipline-rules question selects the VI section", () =
 test("select: daily timetable selects the timetable section, not course schedule", () => {
   const out = selectSections("What is the daily timetable?", "en");
   assert.ok(out.includes("## 7. THE DAILY TIMETABLE"), "contains section 7");
+});
+
+test("select: Vietnamese group sitting question selects section 14", () => {
+  const out = selectSections("Thông tin về thiền chung offline tại Hà Nội?", "vi");
+  assert.ok(out.includes("## 14-VI."), "contains VI section 14");
+  assert.ok(out.includes("THIỀN CHUNG OFFLINE"), "contains group sitting heading");
+  assert.ok(out.includes("https://zalo.me/g/udknri223"), "contains Zalo link");
+});
+
+test("select: English group sitting question selects section 14", () => {
+  const out = selectSections("Where can I find information about offline group sitting in Hanoi?", "en");
+  assert.ok(out.includes("## 14."), "contains EN section 14");
+  assert.ok(out.includes("OFFLINE GROUP SITTING"), "contains EN group sitting heading");
 });
 
 test("select: unknown text falls back to general default sections", () => {
