@@ -1,13 +1,17 @@
 # Deployment
 
-The official deployment of this project lives at [vipassana-assistant.vercel.app](https://vipassana-assistant.vercel.app), deployed via the deploy workflow in this repository. Deployment happens only on pushes to the `main` branch — pushing or opening a PR from any other branch triggers no deployment.
+The official deployment of this project lives at [vipassana-assistant.vercel.app](https://vipassana-assistant.vercel.app), deployed via the deploy workflow in this repository. Deployment is triggered manually via GitHub Actions workflow dispatch.
 
-## For contributors
+## Deployment workflow
 
-There is nothing special to run — deployment is fully automated once your changes reach `main`:
+Deployments are intentionally manual rather than automatic on push:
 
-1. Open a pull request to `main`. CI (`.github/workflows/ci.yml`) runs the unit tests (`npm test`) and the linter (`npm run lint`) — a PR that fails either cannot be merged.
-2. When the PR is merged, a push to `main` triggers CI first; on success, the deploy workflow (`.github/workflows/deploy.yml`) ships a production deployment to `vipassana-assistant.vercel.app`. A push to `main` with failing CI does not deploy.
+1. **Pull requests & commits to `main`**: CI (`.github/workflows/ci.yml`) runs unit tests (`npm test`), linter (`npm run lint`), and typecheck (`npm run typecheck`). Commits reaching `main` must pass CI.
+2. **Triggering a deployment**: Maintainers trigger deployment manually through GitHub Actions:
+   - **GitHub UI**: Navigate to **Actions** → **Deploy to Vercel** → click **Run workflow** on `main`.
+   - **GitHub CLI**: Run `gh workflow run deploy.yml --ref main`.
+
+When triggered, the deploy workflow (`.github/workflows/deploy.yml`) checks out `main`, builds the project with Vercel CLI, and deploys production artifacts directly to `vipassana-assistant.vercel.app`.
 
 ## Deployment architecture
 
